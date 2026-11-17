@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { CreateForm } from "../../../components/CreateForm";
+import { DesignLibrary } from "../../../components/DesignLibrary";
 import { EmptyState, ErrorNote, Skeleton, StatusBadge, TopBar } from "../../../components/ui";
 import { type Campaign, type Project, api, timeAgo, useResource } from "../../../lib/api";
 
@@ -33,10 +34,10 @@ export default function ProjectPage() {
   return (
     <div className="flex min-h-full flex-col">
       <TopBar crumbs={[{ label: "Projects", href: "/" }, { label: project.data?.name ?? "…" }]} />
-      <main className="mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8">
+      <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-8">
         <div>
           <h1 className="text-xl font-semibold">{project.data?.name ?? <Skeleton className="h-7 w-48" />}</h1>
-          <p className="mt-1 text-sm text-zinc-600">Campaigns in this project.</p>
+          <p className="mt-1 text-sm text-zinc-600">Campaigns and source designs in this project.</p>
         </div>
         <CreateForm label="Campaign name" placeholder="New campaign name" submitLabel="Create campaign" onCreate={create} />
         {(project.error || campaigns.error) && <ErrorNote>{(project.error ?? campaigns.error)!.message}</ErrorNote>}
@@ -55,6 +56,9 @@ export default function ProjectPage() {
             </li>
           ))}
         </ul>
+        <div className="border-t border-zinc-200 pt-6">
+          <DesignLibrary projectId={id} />
+        </div>
       </main>
     </div>
   );

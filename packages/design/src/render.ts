@@ -12,7 +12,7 @@ export interface RenderOptions {
   assetUrl: (assetKey: string) => string;
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const px = (n: number) => `${Math.round(n * 100) / 100}px`;
 
 /** Only plain CSS colour syntax is allowed through, so a document cannot inject CSS. */
@@ -28,14 +28,18 @@ export function fillToCss(fill: Fill | undefined): string | undefined {
 }
 
 function fontStack(family: string): string {
-  return `"${family.replace(/["\;{}<>]/g, "")}", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+  // Single quotes only: this value sits inside a double-quoted style attribute.
+  return `'${family.replace(/['"\\;{}<>]/g, "")}', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
 }
 
 function style(decls: Record<string, string | number | undefined | false>): string {
-  return Object.entries(decls)
-    .filter(([, v]) => v !== undefined && v !== false && v !== "")
-    .map(([k, v]) => `${k}:${v}`)
-    .join(";");
+  // Escaped as a whole so no value can close the style attribute it is written into.
+  return esc(
+    Object.entries(decls)
+      .filter(([, v]) => v !== undefined && v !== false && v !== "")
+      .map(([k, v]) => `${k}:${v}`)
+      .join(";"),
+  );
 }
 
 function box(layer: Layer): Record<string, string | undefined | false> {

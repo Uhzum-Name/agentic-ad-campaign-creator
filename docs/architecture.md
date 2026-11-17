@@ -75,6 +75,34 @@ and `group` layers with geometry relative to the parent. Each layer may carry a
 variation, resizing and animation target "the CTA" rather than a layer name.
 The model is source-agnostic; Figma is one importer.
 
+### Inspection, overrides and rendering (`packages/design`)
+
+- **Inspection:** `listLayers`, `findLayers` (by type, role, name), `getLayer`,
+  `summarizeDesign`. Exposed at `GET /v1/designs/:id`, `/layers`, `/layers/:layerId`.
+- **Overrides:** `applyOverrides(document, ...patches)` returns a new document;
+  the source is never mutated.
+- **Rendering:** `renderDocument` produces HTML with inline styles and no
+  scripts. It is the only renderer: workspace cards, the design viewer, and
+  later export and capture all use it. Text is escaped and style values are
+  restricted, so a document cannot inject markup. Fonts are requested from
+  Google Fonts by family name; a family Google does not host falls back to a
+  system font (uploading licensed fonts is not built).
+
+### Design ingestion (`packages/engine`, `packages/figma`)
+
+Three ways in: a built-in sample (`POST /projects/:id/designs/from-fixture`),
+a document supplied directly (`POST /projects/:id/designs`), and Figma
+(`POST /projects/:id/designs/import-figma`, a background job).
+
+The Figma importer uses three documented REST endpoints (file nodes, image
+fills, image renders) with a personal access token in `FIGMA_TOKEN`. Text,
+images, rectangles, ellipses and containers become live layers. Vectors,
+rotated nodes, masks, shapes with effects and unsupported fills are rendered
+by Figma and placed as flat image layers; the import report lists each one and
+why. Figma's own render of the frame is stored as a reference so our render
+can be compared with it in the design viewer. Semantic roles are inferred from
+layer names. The Figma file is never modified.
+
 ## API conventions
 
 - JSON in and out, under `/v1`.
@@ -118,14 +146,21 @@ status, progress, output or a structured error back. Clients read only the
 - **Queue:** pg-boss on PostgreSQL. Chosen over Redis to avoid a second
   service; the `JobSystem` class is the only code that knows about it.
 
-The only job type so far is `system.ping`, a diagnostic that exercises the
-pipeline. It performs no creative work.
+Job types: `design.import_figma`, and `system.ping` (a diagnostic).
+
+**Inline mode.** On hosts that cannot run a worker (Vercel), `submit` runs the
+job to completion inside the request and returns it finished. Same job code,
+same `jobs` record. It only suits jobs that fit in a request's time limit.
 
 ## Storage
 
-`Storage` interface (`put`, `get`, `exists`, `delete`) with slash-separated
-keys. Only a local-disk driver exists. An S3-compatible driver is planned and
-not implemented.
+`Storage` interface (`put`, `get`, `read`, `exists`, `delete`) with
+slash-separated keys. The default driver keeps objects in PostgreSQL
+(`stored_objects`), so the API, the worker and serverless hosts share assets
+with no shared disk. It suits design assets; large rendered video should use an
+S3-compatible driver, which is not implemented. A local-disk driver also exists.
+Files are served at `GET /v1/assets/<key>` with a sandboxing content-security
+policy, because imported SVG is untrusted.
 
 ## Decisions
 
@@ -143,14 +178,14 @@ not implemented.
 Website and API deploy as one Vercel project (root directory `apps/web`) with
 a hosted PostgreSQL database (`DATABASE_URL`). Migrations run during the build.
 The **worker is not deployed** on Vercel, which cannot run an always-on
-process: jobs can be submitted there but stay queued. A worker host is needed
-before rendering and export work (milestone 9). Asset storage on Vercel is
-temporary; durable object storage is needed before designs are imported.
+process; jobs run inline there. A worker host is needed before rendering and
+export work (milestone 9). Set `FIGMA_TOKEN` in the host's environment
+variables to enable Figma import.
 
 ## Known limitations
 
 - No user accounts; a single optional shared API key.
 - No S3 driver.
-- Variation cards show production state only; rendering the creative arrives with milestone 3.
+- Figma import has not yet been run against a real Figma file.
+- Asset URLs are not access-controlled beyond their unguessable ids.
 - No side-by-side comparison or export status in the grid yet.
-- Figma access is not wired up; the design model is schema-only until milestone 3.

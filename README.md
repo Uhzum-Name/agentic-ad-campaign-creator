@@ -4,7 +4,7 @@ An agent-native creative production engine with a human-facing workspace. An AI
 agent directs production through a structured engine (REST and MCP); a person
 supervises through a variation grid.
 
-Status: **milestones 1–2 of 12 complete** (technical foundation; workspace with variation grid and agent panel).
+Status: **milestones 1–3 of 12 built** (technical foundation; workspace; design model, renderer and Figma import, the last not yet verified against a real Figma file).
 See [docs/architecture.md](docs/architecture.md) for the design and
 [docs/roadmap.md](docs/roadmap.md) for what is and is not built.
 
@@ -48,7 +48,10 @@ pnpm test             # integration tests run against TEST_DATABASE_URL
 |---|---|
 | `packages/core` | Shared schemas: entity inputs, the design document model, ids, errors, config |
 | `packages/db` | PostgreSQL schema (Drizzle) and migrations |
-| `packages/storage` | Asset storage interface and local-disk driver |
+| `packages/storage` | Asset storage interface; PostgreSQL (default) and local-disk drivers |
+| `packages/design` | Layer inspection, override application and the HTML renderer (browser-safe) |
+| `packages/figma` | Figma REST client and Figma-to-design converter |
+| `packages/engine` | Sample designs, design ingestion, and the engine's job types |
 | `packages/jobs` | Durable background jobs (pg-boss dispatch, `jobs` table as source of truth) |
 | `apps/api` | REST API |
 | `apps/worker` | Job worker process |

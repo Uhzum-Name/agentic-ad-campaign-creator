@@ -1,6 +1,7 @@
 "use client";
 
 import type { CampaignStatus, DirectionStatus, FormatStatus, MessageKind, MessageRole, VariationStatus } from "@adengine/core/entities";
+import type { DesignDocument } from "@adengine/core/design";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface Project {
@@ -38,6 +39,7 @@ export interface Variation {
   name: string;
   status: VariationStatus;
   sourceDesignId: string | null;
+  overrides: Record<string, Record<string, unknown>>;
   formats: Format[];
 }
 export interface Direction {
@@ -49,8 +51,33 @@ export interface Direction {
   status: DirectionStatus;
   variations: Variation[];
 }
+export interface Design {
+  id: string;
+  projectId: string;
+  name: string;
+  width: number;
+  height: number;
+  source: { kind: "fixture"; name: string } | { kind: "figma"; fileKey: string; nodeId: string } | { kind: "manual" };
+  document: DesignDocument;
+  referenceAssetKey: string | null;
+  importReport: {
+    rasterized?: { nodeId: string; name: string; reason: string }[];
+    skipped?: { nodeId: string; name: string; reason: string }[];
+    warnings?: string[];
+  } | null;
+  createdAt: string;
+}
+export interface Job {
+  id: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  progress: number;
+  progressMessage: string | null;
+  output: unknown;
+  error: { code: string; message: string } | null;
+}
 export interface Workspace {
   campaign: Campaign;
+  designs: Record<string, Pick<Design, "id" | "name" | "width" | "height" | "document">>;
   brief: Brief | null;
   directions: Direction[];
 }
@@ -140,6 +167,19 @@ export function useResource<T>(path: string | null, pollMs?: number): Resource<T
   }, [path, pollMs, refresh]);
 
   return { data, error, loading, refresh };
+}
+
+export const assetUrl = (key: string) => `/api/assets/${key.split("/").map(encodeURIComponent).join("/")}`;
+
+/** Polls a job until it finishes; resolves with the finished job. */
+export async function waitForJob(job: Job, onUpdate?: (job: Job) => void): Promise<Job> {
+  let current = job;
+  while (current.status === "queued" || current.status === "running") {
+    await new Promise((r) => setTimeout(r, 1000));
+    current = await api<Job>(`/jobs/${current.id}`);
+    onUpdate?.(current);
+  }
+  return current;
 }
 
 export function timeAgo(iso: string): string {

@@ -85,6 +85,18 @@ describe("rendering", () => {
     expect(html).toContain("overflow:hidden");
   });
 
+  it("writes complete text styles into a well-formed style attribute", () => {
+    const headline = /data-layer-id="headline"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(headline).toContain("font-family:&#39;Inter&#39;, system-ui");
+    expect(headline).toContain("font-weight:700;font-size:28px");
+    expect(headline).toContain("line-height:1.1");
+    expect(headline).toContain("color:#ffffff");
+    expect(headline).toContain("white-space:pre-wrap");
+    // Every element carries exactly one style attribute that closes where it should.
+    for (const m of html.matchAll(/style="([^"]*)"/g)) expect(m[1]).not.toMatch(/[<>]/);
+    expect(html.match(/style="/g)!.length).toBe(html.match(/<(div|img)[ >]/g)!.length);
+  });
+
   it("escapes text and hides invisible layers", () => {
     expect(html).toContain("Run &lt;further&gt; &amp; &quot;faster&quot;");
     expect(html).not.toContain("<further>");

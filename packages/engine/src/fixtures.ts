@@ -30,7 +30,7 @@ const SHOE = svg(
 );
 
 const PEAK_LOGO = svg(
-  120,
+  156,
   28,
   `<path d="M2 24L14 4l7 11 4-6 9 15z" fill="#f4f1ea"/>
   <text x="42" y="20" font-family="Inter, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1.5" fill="#f4f1ea">NORTHPEAK</text>`,
@@ -75,7 +75,7 @@ export const FIXTURES: Fixture[] = [
       background: { type: "solid", color: "#0c1f1a" },
       layers: [
         { id: "background", type: "image", name: "Background scene", role: "background", x: 0, y: 0, width: 300, height: 250, rotation: 0, opacity: 1, visible: true, assetKey: "{{asset:mountains.svg}}", fit: "cover", focus: { x: 0.5, y: 0.6 }, cornerRadius: 0 },
-        { id: "logo", type: "image", name: "Logo", role: "logo", x: 16, y: 14, width: 104, height: 24, rotation: 0, opacity: 1, visible: true, assetKey: "{{asset:logo.svg}}", fit: "contain", cornerRadius: 0 },
+        { id: "logo", type: "image", name: "Logo", role: "logo", x: 16, y: 14, width: 134, height: 24, rotation: 0, opacity: 1, visible: true, assetKey: "{{asset:logo.svg}}", fit: "contain", cornerRadius: 0 },
         { id: "headline", type: "text", name: "Headline", role: "headline", x: 16, y: 52, width: 190, height: 62, rotation: 0, opacity: 1, visible: true, text: "Grip every\ntrail.", style: { fontFamily: "Inter", fontWeight: 800, fontSize: 28, lineHeight: 1.08, letterSpacing: -0.5, color: "#f4f1ea", align: "left", verticalAlign: "top", italic: false, transform: "none" } },
         { id: "subheadline", type: "text", name: "Subheadline", role: "subheadline", x: 16, y: 118, width: 150, height: 34, rotation: 0, opacity: 1, visible: true, text: "The new Ridge 2, built for wet rock and loose ground.", style: { fontFamily: "Inter", fontWeight: 400, fontSize: 11, lineHeight: 1.4, letterSpacing: 0, color: "#c9d6cf", align: "left", verticalAlign: "top", italic: false, transform: "none" } },
         { id: "product", type: "image", name: "Product", role: "product", x: 128, y: 128, width: 172, height: 108, rotation: 0, opacity: 1, visible: true, assetKey: "{{asset:shoe.svg}}", fit: "contain", cornerRadius: 0 },
@@ -102,7 +102,7 @@ export const FIXTURES: Fixture[] = [
       layers: [
         { id: "product", type: "image", name: "Product", role: "product", x: 14, y: 8, width: 74, height: 74, rotation: 0, opacity: 1, visible: true, assetKey: "{{asset:cup.svg}}", fit: "contain", cornerRadius: 0 },
         { id: "logo", type: "image", name: "Logo", role: "logo", x: 104, y: 14, width: 88, height: 22, rotation: 0, opacity: 1, visible: true, assetKey: "{{asset:logo.svg}}", fit: "contain", cornerRadius: 0 },
-        { id: "headline", type: "text", name: "Headline", role: "headline", x: 104, y: 40, width: 330, height: 36, rotation: 0, opacity: 1, visible: true, text: "Fresh coffee, roasted the day it ships.", style: { fontFamily: "Inter", fontWeight: 700, fontSize: 19, lineHeight: 1.15, letterSpacing: -0.2, color: "#3b1f12", align: "left", verticalAlign: "middle", italic: false, transform: "none" } },
+        { id: "headline", type: "text", name: "Headline", role: "headline", x: 104, y: 40, width: 344, height: 36, rotation: 0, opacity: 1, visible: true, text: "Fresh coffee, roasted the day it ships.", style: { fontFamily: "Inter", fontWeight: 700, fontSize: 19, lineHeight: 1.15, letterSpacing: -0.2, color: "#3b1f12", align: "left", verticalAlign: "middle", italic: false, transform: "none" } },
         {
           id: "offer", type: "group", name: "Offer", role: "offer", x: 452, y: 22, width: 116, height: 46, rotation: 0, opacity: 1, visible: true, clip: false, cornerRadius: 8, fill: { type: "solid", color: "#5a2f1a" },
           children: [
