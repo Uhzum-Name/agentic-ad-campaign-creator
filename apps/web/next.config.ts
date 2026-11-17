@@ -21,7 +21,6 @@ const apiUrl = process.env.API_URL;
 
 const config: NextConfig = {
   transpilePackages: ["@adengine/core", "@adengine/db", "@adengine/jobs", "@adengine/storage", "@adengine/api"],
-  serverExternalPackages: ["pg", "pg-boss", "fastify"],
   async rewrites() {
     if (!apiUrl) return [];
     return { beforeFiles: [{ source: "/api/:path*", destination: `${apiUrl}/v1/:path*` }], afterFiles: [], fallback: [] };

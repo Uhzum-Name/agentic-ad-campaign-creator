@@ -15,6 +15,8 @@ export interface DbHandle {
 
 export function connect(databaseUrl: string): DbHandle {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 10 });
+  // An idle connection dropped by the database must not crash the process.
+  pool.on("error", (err) => console.error("[db] idle connection error:", err.message));
   const db = drizzle(pool, { schema });
   return { db, pool, close: () => pool.end() };
 }
