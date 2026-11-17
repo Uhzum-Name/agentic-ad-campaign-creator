@@ -1,4 +1,4 @@
-import { loadConfig } from "@adengine/core";
+import { loadConfig } from "@adengine/core/config";
 import { connect, migrate } from "@adengine/db";
 import { JobSystem, createDefaultRegistry } from "@adengine/jobs";
 import { createStorage } from "@adengine/storage";
@@ -9,7 +9,7 @@ const handle = connect(config.databaseUrl);
 await migrate(handle.db);
 
 const jobs = new JobSystem({ db: handle.db, databaseUrl: config.databaseUrl, registry: await createDefaultRegistry() });
-await jobs.start(); // the API only enqueues; the worker process executes
+// The API only enqueues (the queue connects on first use); the worker process executes.
 
 const app = buildApp({ db: handle.db, jobs, storage: createStorage(config.storage), config });
 await app.listen({ port: config.apiPort, host: "0.0.0.0" });

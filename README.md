@@ -19,19 +19,18 @@ pnpm dev:services     # Debian/Ubuntu with local Postgres; or: docker compose up
 pnpm db:migrate
 ```
 
-Then, in three terminals:
+Then:
 
 ```bash
-pnpm dev:api          # REST API on :4000
+pnpm dev:web          # web app and API on :3000
 ```
 
 ```bash
-pnpm dev:worker       # background job processor
+pnpm dev:worker       # background job processor (separate terminal)
 ```
 
-```bash
-pnpm dev:web          # web app on :3000
-```
+`pnpm dev:api` runs the API as a standalone server on :4000; set `API_URL` for
+the web app to use it.
 
 ## Test
 

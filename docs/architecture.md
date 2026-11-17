@@ -18,6 +18,9 @@ for the other to work.
 ```
 
 - **api** — REST under `/v1`. Validates, persists, enqueues. Never does long work inline.
+  It can run as its own server (`apps/api`) or embedded in the web app
+  (`apps/web/src/app/api/[...path]`), which is the default and what lets one
+  Vercel project serve both. Set `API_URL` to proxy to a separate server instead.
 - **worker** — executes jobs. Can be scaled or restarted independently.
 - **web** — UI only. Talks to the API through a same-origin `/api/*` proxy.
 
@@ -134,6 +137,15 @@ not implemented.
 | One DOM renderer for preview, editor, HTML5 export and capture | Preview and export cannot drift |
 | MCP-first agent, no server-side LLM | No per-token cost to operate; the user's own Claude is the agent |
 | Packages export TypeScript source, run with `tsx` | No build step during early development |
+
+## Deployment (preview)
+
+Website and API deploy as one Vercel project (root directory `apps/web`) with
+a hosted PostgreSQL database (`DATABASE_URL`). Migrations run during the build.
+The **worker is not deployed** on Vercel, which cannot run an always-on
+process: jobs can be submitted there but stay queued. A worker host is needed
+before rendering and export work (milestone 9). Asset storage on Vercel is
+temporary; durable object storage is needed before designs are imported.
 
 ## Known limitations
 

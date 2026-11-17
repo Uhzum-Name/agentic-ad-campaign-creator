@@ -109,6 +109,7 @@ export class JobSystem {
       throw new AppError("validation_error", `Invalid input for job type "${type}"`, parsed.error.issues);
     }
     const maxAttempts = def.maxAttempts ?? 1;
+    await this.start(); // lazy, so hosts that only serve requests connect to the queue on first use
     const [row] = await this.db
       .insert(jobs)
       .values({ type, input: parsed.data, maxAttempts, projectId: opts.projectId, parentJobId: opts.parentJobId })
@@ -141,6 +142,7 @@ export class JobSystem {
   async cancel(id: string): Promise<JobRow> {
     const row = await this.get(id);
     if (TERMINAL_JOB_STATUSES.includes(row.status)) return row;
+    await this.start();
     const now = new Date();
     const [cancelledWhileQueued] = await this.db
       .update(jobs)

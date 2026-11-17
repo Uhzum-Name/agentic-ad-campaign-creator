@@ -19,8 +19,7 @@ export function connect(databaseUrl: string): DbHandle {
   return { db, pool, close: () => pool.end() };
 }
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
-
 export async function migrate(db: Db): Promise<void> {
-  await drizzleMigrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
+  await drizzleMigrate(db, { migrationsFolder });
 }

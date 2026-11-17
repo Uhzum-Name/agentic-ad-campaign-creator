@@ -1,4 +1,4 @@
-import { loadConfig } from "@adengine/core";
+import { loadConfig } from "@adengine/core/config";
 import { connect, migrate } from "@adengine/db";
 import { JobSystem, createDefaultRegistry } from "@adengine/jobs";
 

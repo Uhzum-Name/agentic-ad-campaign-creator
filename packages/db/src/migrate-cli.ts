@@ -1,4 +1,4 @@
-import { loadConfig } from "@adengine/core";
+import { loadConfig } from "@adengine/core/config";
 import { connect, migrate } from "./client.ts";
 
 const config = loadConfig();
