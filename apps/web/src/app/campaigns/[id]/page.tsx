@@ -77,6 +77,7 @@ export default function CampaignWorkspacePage() {
       </TopBar>
 
       <div className="flex min-h-0 flex-1">
+        {campaign && <AgentPanel campaignId={campaign.id} brief={workspace.data!.brief} onBriefSaved={workspace.refresh} />}
         <main className="min-w-0 flex-1 overflow-y-auto p-4">
           {statusError && <ErrorNote>{statusError}</ErrorNote>}
           {workspace.error && !workspace.data && <ErrorNote>{workspace.error.message}</ErrorNote>}
@@ -89,7 +90,6 @@ export default function CampaignWorkspacePage() {
           )}
           {workspace.data && <VariationGrid workspace={workspace.data} onChange={workspace.refresh} />}
         </main>
-        {campaign && <AgentPanel campaignId={campaign.id} brief={workspace.data!.brief} onBriefSaved={workspace.refresh} />}
       </div>
     </div>
   );

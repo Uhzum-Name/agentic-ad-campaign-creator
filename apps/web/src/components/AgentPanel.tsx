@@ -9,7 +9,7 @@ type Tab = "thread" | "brief";
 export function AgentPanel({ campaignId, brief, onBriefSaved }: { campaignId: string; brief: Brief | null; onBriefSaved: () => Promise<void> }) {
   const [tab, setTab] = useState<Tab>("thread");
   return (
-    <aside aria-label="Agent" className="flex w-[380px] shrink-0 flex-col border-l border-zinc-200 bg-white">
+    <aside aria-label="Agent" className="flex w-[380px] shrink-0 flex-col border-r border-zinc-200 bg-white">
       <div role="tablist" aria-label="Agent panel" className="flex shrink-0 border-b border-zinc-200 px-2">
         {(
           [
