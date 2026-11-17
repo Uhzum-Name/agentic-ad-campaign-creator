@@ -20,6 +20,7 @@ export type JobRow = typeof jobs.$inferSelect;
 
 export interface JobContext {
   jobId: string;
+  projectId: string | null;
   attempt: number;
   db: Db;
   /** `fraction` is 0..1. Throws `job_cancelled` if cancellation was requested. */
@@ -66,10 +67,18 @@ export interface JobSystemOptions {
   /** Postgres schema for the queue's own tables. Tests use a separate one. */
   queueSchema?: string;
   pollingIntervalSeconds?: number;
+  /**
+   * "queue" (default): jobs are dispatched to a worker process through pg-boss.
+   * "inline": no queue and no worker; `submit` runs the job to completion in
+   * the calling process before returning. For hosts that cannot run a worker.
+   * Only suitable for jobs that finish within the host's request time limit.
+   */
+  mode?: "queue" | "inline";
 }
 
 export class JobSystem {
   private readonly boss: PgBoss;
+  private readonly inline: boolean;
   private readonly db: Db;
   private readonly registry: JobRegistry;
   private readonly pollingIntervalSeconds: number;
@@ -79,12 +88,14 @@ export class JobSystem {
     this.db = opts.db;
     this.registry = opts.registry;
     this.pollingIntervalSeconds = opts.pollingIntervalSeconds ?? 1;
+    this.inline = opts.mode === "inline";
+    // Constructing the client opens no connection; that happens in start().
     this.boss = new PgBoss({ connectionString: opts.databaseUrl, schema: opts.queueSchema ?? "pgboss" });
     this.boss.on("error", (err) => console.error("[jobs] queue error:", err));
   }
 
   async start(): Promise<void> {
-    if (this.started) return;
+    if (this.started || this.inline) return;
     await this.boss.start();
     for (const def of this.registry.list()) await this.boss.createQueue(queueName(def.type));
     this.started = true;
@@ -115,6 +126,17 @@ export class JobSystem {
       .values({ type, input: parsed.data, maxAttempts, projectId: opts.projectId, parentJobId: opts.parentJobId })
       .returning();
     if (!row) throw new Error("Failed to insert job");
+    if (this.inline) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await this.run(def, row.id);
+          break;
+        } catch {
+          // run() recorded the error and left the job queued for another attempt.
+        }
+      }
+      return this.get(row.id);
+    }
     try {
       const queueJobId = await this.boss.send(
         queueName(type),
@@ -150,7 +172,7 @@ export class JobSystem {
       .where(and(eq(jobs.id, id), eq(jobs.status, "queued")))
       .returning();
     if (cancelledWhileQueued) {
-      if (row.queueJobId) await this.boss.cancel(queueName(row.type), row.queueJobId).catch(() => {});
+      if (row.queueJobId && !this.inline) await this.boss.cancel(queueName(row.type), row.queueJobId).catch(() => {});
       return cancelledWhileQueued;
     }
     await this.db.update(jobs).set({ cancelRequestedAt: now }).where(and(eq(jobs.id, id), eq(jobs.status, "running")));
@@ -159,6 +181,7 @@ export class JobSystem {
 
   /** Starts consuming every registered job type. Call from the worker process. */
   async work(opts: { concurrency?: number } = {}): Promise<void> {
+    if (this.inline) throw new Error("An inline job system has no queue to work");
     await this.start();
     for (const def of this.registry.list()) {
       await this.boss.work<{ jobId: string }>(
@@ -186,6 +209,7 @@ export class JobSystem {
     };
     const ctx: JobContext = {
       jobId,
+      projectId: row.projectId,
       attempt: row.attempts,
       db: this.db,
       throwIfCancelled,
@@ -228,8 +252,3 @@ export class JobSystem {
 
 export { systemPingJob } from "./system-jobs.ts";
 
-/** The registry shared by the API (to validate submissions) and the worker (to run them). */
-export async function createDefaultRegistry(): Promise<JobRegistry> {
-  const { systemPingJob } = await import("./system-jobs.ts");
-  return new JobRegistry().register(systemPingJob);
-}

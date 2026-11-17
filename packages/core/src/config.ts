@@ -30,7 +30,8 @@ const Env = z.object({
   TEST_DATABASE_URL: z.string().optional(),
   API_PORT: z.coerce.number().int().default(4000),
   API_KEY: z.string().optional().transform((v) => (v ? v : undefined)),
-  STORAGE_DRIVER: z.enum(["local"]).default("local"),
+  STORAGE_DRIVER: z.enum(["postgres", "local"]).default("postgres"),
+  FIGMA_TOKEN: z.string().optional().transform((v) => (v ? v : undefined)),
   STORAGE_LOCAL_DIR: z.string().default(".data/storage"),
 });
 
@@ -40,7 +41,8 @@ export interface Config {
   testDatabaseUrl?: string;
   apiPort: number;
   apiKey?: string;
-  storage: { driver: "local"; localDir: string };
+  storage: { driver: "postgres" | "local"; localDir: string };
+  figmaToken?: string;
 }
 
 export function loadConfig(): Config {
@@ -59,5 +61,6 @@ export function loadConfig(): Config {
     apiPort: e.API_PORT,
     apiKey: e.API_KEY,
     storage: { driver: e.STORAGE_DRIVER, localDir: resolve(repoRoot, e.STORAGE_LOCAL_DIR) },
+    figmaToken: e.FIGMA_TOKEN,
   };
 }

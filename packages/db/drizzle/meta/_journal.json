@@ -15,6 +15,13 @@
       "when": 1794876892884,
       "tag": "0001_keen_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794888800258,
+      "tag": "0002_thin_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

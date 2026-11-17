@@ -11,6 +11,9 @@
   "dependencies": {
     "@adengine/core": "workspace:*",
     "@adengine/db": "workspace:*",
+    "@adengine/design": "workspace:*",
+    "@adengine/engine": "workspace:*",
+    "@adengine/figma": "workspace:*",
     "@adengine/jobs": "workspace:*",
     "@adengine/storage": "workspace:*",
     "drizzle-orm": "^0.45.0",

@@ -11,6 +11,8 @@
   "dependencies": {
     "@adengine/core": "workspace:*",
     "@adengine/db": "workspace:*",
+    "@adengine/engine": "workspace:*",
+    "@adengine/storage": "workspace:*",
     "@adengine/jobs": "workspace:*"
   }
 }

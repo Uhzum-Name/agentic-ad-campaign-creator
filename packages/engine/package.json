@@ -1,0 +1,18 @@
+{
+  "name": "@adengine/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc -p ." },
+  "dependencies": {
+    "@adengine/core": "workspace:*",
+    "@adengine/db": "workspace:*",
+    "@adengine/design": "workspace:*",
+    "@adengine/figma": "workspace:*",
+    "@adengine/jobs": "workspace:*",
+    "@adengine/storage": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "zod": "^4.6.0"
+  }
+}

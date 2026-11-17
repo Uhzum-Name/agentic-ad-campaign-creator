@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import type { z } from "zod";
 import { campaignRoutes } from "./routes/campaigns.ts";
+import { designRoutes } from "./routes/designs.ts";
 import { creativeRoutes } from "./routes/creative.ts";
 import { jobRoutes } from "./routes/jobs.ts";
 import { projectRoutes } from "./routes/projects.ts";
@@ -73,6 +74,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       projectRoutes(v1, deps);
       campaignRoutes(v1, deps);
       creativeRoutes(v1, deps);
+      designRoutes(v1, deps);
       jobRoutes(v1, deps);
     },
     { prefix: "/v1" },

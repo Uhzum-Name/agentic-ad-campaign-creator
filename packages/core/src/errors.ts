@@ -8,6 +8,8 @@ export const ERROR_CODES = [
   "unauthorized",
   "conflict",
   "job_cancelled",
+  "rate_limited",
+  "upstream_error",
   "internal_error",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -24,6 +26,8 @@ const HTTP_STATUS: Record<ErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   job_cancelled: 409,
+  rate_limited: 429,
+  upstream_error: 502,
   internal_error: 500,
 };
 

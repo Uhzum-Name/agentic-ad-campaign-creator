@@ -29,6 +29,15 @@ importers:
       '@adengine/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@adengine/design':
+        specifier: workspace:*
+        version: link:../../packages/design
+      '@adengine/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@adengine/figma':
+        specifier: workspace:*
+        version: link:../../packages/figma
       '@adengine/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -56,6 +65,12 @@ importers:
       '@adengine/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@adengine/design':
+        specifier: workspace:*
+        version: link:../../packages/design
+      '@adengine/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@adengine/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -105,9 +120,15 @@ importers:
       '@adengine/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@adengine/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@adengine/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@adengine/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
 
   packages/core:
     dependencies:
@@ -134,6 +155,45 @@ importers:
         specifier: ^0.31.0
         version: 0.31.11
 
+  packages/design:
+    dependencies:
+      '@adengine/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/engine:
+    dependencies:
+      '@adengine/core':
+        specifier: workspace:*
+        version: link:../core
+      '@adengine/db':
+        specifier: workspace:*
+        version: link:../db
+      '@adengine/design':
+        specifier: workspace:*
+        version: link:../design
+      '@adengine/figma':
+        specifier: workspace:*
+        version: link:../figma
+      '@adengine/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@adengine/storage':
+        specifier: workspace:*
+        version: link:../storage
+      drizzle-orm:
+        specifier: ^0.45.0
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
+      zod:
+        specifier: ^4.6.0
+        version: 4.6.7
+
+  packages/figma:
+    dependencies:
+      '@adengine/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/jobs:
     dependencies:
       '@adengine/core':
@@ -157,6 +217,12 @@ importers:
       '@adengine/core':
         specifier: workspace:*
         version: link:../core
+      '@adengine/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.0
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
 
 packages:
 

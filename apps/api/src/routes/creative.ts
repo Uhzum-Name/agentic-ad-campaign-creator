@@ -42,10 +42,19 @@ export function creativeRoutes(app: FastifyInstance, { db }: AppDeps): void {
     const formats = allVariations.length
       ? await db.select().from(variationFormats).where(inArray(variationFormats.variationId, allVariations.map((v) => v.id))).orderBy(asc(variationFormats.createdAt))
       : [];
+    const designIds = [...new Set(allVariations.map((v) => v.sourceDesignId).filter((id): id is string => id !== null))];
+    const designs = designIds.length
+      ? await db
+          .select({ id: designDocuments.id, name: designDocuments.name, width: designDocuments.width, height: designDocuments.height, document: designDocuments.document })
+          .from(designDocuments)
+          .where(inArray(designDocuments.id, designIds))
+      : [];
     return {
       data: {
         campaign,
         brief,
+        /** Source designs referenced by the variations, keyed by id, so the grid can render them. */
+        designs: Object.fromEntries(designs.map((d) => [d.id, d])),
         directions: directions.map((d) => ({
           ...d,
           variations: allVariations

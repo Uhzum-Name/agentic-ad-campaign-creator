@@ -1,7 +1,9 @@
 import { loadConfig } from "@adengine/core/config";
 import { type DbHandle, connect, migrate } from "@adengine/db";
-import { JobSystem, createDefaultRegistry } from "@adengine/jobs";
-import { LocalStorage } from "@adengine/storage";
+import { createEngineRegistry } from "@adengine/engine";
+import { JobSystem } from "@adengine/jobs";
+import { PostgresStorage, type Storage } from "@adengine/storage";
+import { figmaFetch } from "./figma-fixture.ts";
 import { sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -12,6 +14,7 @@ if (!config.testDatabaseUrl) throw new Error("TEST_DATABASE_URL must be set to r
 
 let handle: DbHandle;
 let jobs: JobSystem;
+let storage: Storage;
 let app: FastifyInstance;
 
 async function call(method: string, url: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -32,15 +35,16 @@ async function waitForJob(id: string, done: (status: string) => boolean, timeout
 beforeAll(async () => {
   handle = connect(config.testDatabaseUrl!);
   await migrate(handle.db);
-  await handle.db.execute(sql`truncate projects, jobs, recipes cascade`);
+  await handle.db.execute(sql`truncate projects, jobs, recipes, stored_objects cascade`);
+  storage = new PostgresStorage(handle.db);
   jobs = new JobSystem({
     db: handle.db,
     databaseUrl: config.testDatabaseUrl!,
-    registry: await createDefaultRegistry(),
+    registry: createEngineRegistry({ db: handle.db, storage, figma: { token: "test-token", fetch: figmaFetch } }),
     pollingIntervalSeconds: 0.5,
   });
   await jobs.work(); // API and worker roles in one process for the test
-  app = buildApp({ db: handle.db, jobs, storage: new LocalStorage("/tmp/unused"), config: {} });
+  app = buildApp({ db: handle.db, jobs, storage, config: {} });
 });
 
 afterAll(async () => {
@@ -105,7 +109,7 @@ describe("projects and campaigns", () => {
 
 describe("authentication", () => {
   it("requires the bearer key when one is configured", async () => {
-    const secured = buildApp({ db: handle.db, jobs, storage: new LocalStorage("/tmp/unused"), config: { apiKey: "s3cret" } });
+    const secured = buildApp({ db: handle.db, jobs, storage, config: { apiKey: "s3cret" } });
     const get = (headers: Record<string, string>) => secured.inject({ method: "GET", url: "/v1/projects", headers });
     expect((await get({})).statusCode).toBe(401);
     expect((await get({ authorization: "Bearer wrong!" })).statusCode).toBe(401);
@@ -222,5 +226,137 @@ describe("workspace: directions, variations and the campaign thread", () => {
     expect((await call("POST", base, { text: "x", role: "system" })).status).toBe(400);
 
     expect((await call("GET", base)).body.data.map((m: { text: string }) => m.text)).toEqual(["Make the CTA bolder", "Generated 5 variations"]);
+  });
+});
+
+describe("designs", () => {
+  async function newProject() {
+    return (await call("POST", "/v1/projects", { name: "Designs" })).body.data as { id: string };
+  }
+
+  it("imports a sample design with its artwork and exposes its layers", async () => {
+    const project = await newProject();
+    const fixtures = (await call("GET", "/v1/design-fixtures")).body.data;
+    expect(fixtures.map((f: { name: string }) => f.name)).toEqual(["trail-shoe-300x250", "coffee-728x90"]);
+
+    const created = await call("POST", `/v1/projects/${project.id}/designs/from-fixture`, { fixture: "trail-shoe-300x250" });
+    expect(created.status).toBe(201);
+    const design = created.body.data;
+    expect(design).toMatchObject({ width: 300, height: 250, source: { kind: "fixture", name: "trail-shoe-300x250" } });
+
+    const detail = (await call("GET", `/v1/designs/${design.id}`)).body.data;
+    expect(detail.summary).toMatchObject({ layerCount: 8, byType: { text: 3, image: 3, shape: 1, group: 1 }, fonts: ["Inter"] });
+    expect(Object.keys(detail.summary.roles).sort()).toEqual(["background", "cta", "headline", "logo", "product", "subheadline"]);
+
+    const layers = (await call("GET", `/v1/designs/${design.id}/layers`)).body.data;
+    expect(layers.map((l: { id: string }) => l.id)).toEqual(["background", "logo", "headline", "subheadline", "product", "cta", "cta-background", "cta-label"]);
+    expect((await call("GET", `/v1/designs/${design.id}/layers?type=text`)).body.data.map((l: { text: string }) => l.text)).toContain("Shop now");
+    expect((await call("GET", `/v1/designs/${design.id}/layers?role=cta`)).body.data).toHaveLength(1);
+    expect((await call("GET", `/v1/designs/${design.id}/layers?role=bogus`)).status).toBe(400);
+
+    const label = (await call("GET", `/v1/designs/${design.id}/layers/cta-label`)).body.data;
+    expect(label).toMatchObject({ absoluteX: 16, absoluteY: 198, path: ["cta"], layer: { type: "text", text: "Shop now", style: { fontWeight: 700 } } });
+    expect((await call("GET", `/v1/designs/${design.id}/layers/nope`)).status).toBe(404);
+
+    // The artwork was copied into storage and is served with a safe content type.
+    const product = layers.find((l: { id: string }) => l.id === "product");
+    expect(product.assetKey).toBe(`designs/${design.id}/shoe.svg`);
+    const asset = await app.inject({ method: "GET", url: `/v1/assets/${product.assetKey}` });
+    expect(asset.statusCode).toBe(200);
+    expect(asset.headers["content-type"]).toBe("image/svg+xml");
+    expect(asset.headers["content-security-policy"]).toContain("sandbox");
+    expect(asset.body.startsWith("<svg")).toBe(true);
+    expect((await call("GET", "/v1/assets/designs/missing/file.png")).status).toBe(404);
+    expect((await call("GET", "/v1/assets/..%2F..%2Fetc%2Fpasswd")).status).toBe(400);
+
+    expect((await call("GET", `/v1/projects/${project.id}/designs`)).body.data).toHaveLength(1);
+    expect((await call("POST", `/v1/projects/${project.id}/designs/from-fixture`, { fixture: "nope" })).status).toBe(400);
+  });
+
+  it("accepts a document directly and validates it", async () => {
+    const project = await newProject();
+    const document = { schemaVersion: 1, width: 320, height: 50, layers: [{ id: "t", type: "text", name: "T", x: 0, y: 0, width: 320, height: 50, text: "Hi", style: { fontFamily: "Inter", fontSize: 20, color: "#000" } }] };
+    const ok = await call("POST", `/v1/projects/${project.id}/designs`, { name: "Mobile banner", document });
+    expect(ok.status).toBe(201);
+    expect(ok.body.data).toMatchObject({ width: 320, height: 50, source: { kind: "manual" } });
+
+    const bad = await call("POST", `/v1/projects/${project.id}/designs`, { name: "Bad", document: { ...document, layers: [{ id: "x", type: "video" }] } });
+    expect(bad.status).toBe(400);
+    const dup = await call("POST", `/v1/projects/${project.id}/designs`, { name: "Dup", document: { ...document, layers: [document.layers[0], document.layers[0]] } });
+    expect(dup.status).toBe(400);
+    expect(dup.body.error.details).toEqual(["Duplicate layer id t"]);
+  });
+
+  it("renders variations from their source design and protects designs in use", async () => {
+    const project = await newProject();
+    const campaign = (await call("POST", `/v1/projects/${project.id}/campaigns`, { name: "C" })).body.data;
+    const design = (await call("POST", `/v1/projects/${project.id}/designs/from-fixture`, { fixture: "coffee-728x90" })).body.data;
+    const direction = (await call("POST", `/v1/campaigns/${campaign.id}/directions`, { name: "D" })).body.data;
+    const variation = (await call("POST", `/v1/directions/${direction.id}/variations`, { name: "V", sourceDesignId: design.id })).body.data;
+
+    const ws = (await call("GET", `/v1/campaigns/${campaign.id}/workspace`)).body.data;
+    expect(Object.keys(ws.designs)).toEqual([design.id]);
+    expect(ws.designs[design.id].document.width).toBe(728);
+
+    const blocked = await call("DELETE", `/v1/designs/${design.id}`);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.message).toContain("1 variation");
+    await call("DELETE", `/v1/variations/${variation.id}`);
+    expect((await call("DELETE", `/v1/designs/${design.id}`)).status).toBe(204);
+  });
+
+  it("imports a Figma frame through a background job", async () => {
+    const project = await newProject();
+    const submitted = await call("POST", `/v1/projects/${project.id}/designs/import-figma`, { url: "https://www.figma.com/design/FILEKEY/Campaign?node-id=1-2" });
+    expect(submitted.status).toBe(202);
+    const job = await waitForJob(submitted.body.data.id, (s) => s !== "queued" && s !== "running");
+    expect(job.status).toBe("succeeded");
+    expect(job.output).toMatchObject({ name: "Banner 300x250 (Campaign file)", width: 300, height: 250 });
+
+    const design = (await call("GET", `/v1/designs/${job.output.designId}`)).body.data;
+    expect(design.source).toEqual({ kind: "figma", fileKey: "FILEKEY", nodeId: "1:2" });
+    expect(design.referenceAssetKey).toBe(`designs/${design.id}/figma-reference.png`);
+    // The node Figma could not render was left out and reported.
+    expect(design.document.layers.map((l: { name: string }) => l.name)).not.toContain("Broken star");
+    expect(design.importReport.warnings.join(" ")).toContain("render of node 1:14");
+    expect(design.summary.texts.map((t: { text: string }) => t.text)).toEqual(["Go further", "Built for the long way round.", "Shop now", "draft"]);
+
+    const types: Record<string, string> = {};
+    for (const key of [`designs/${design.id}/fill-imgref1`, `designs/${design.id}/node-1_9.svg`, `designs/${design.id}/node-1_10.png`, design.referenceAssetKey]) {
+      types[key.split("/").pop()!] = String((await app.inject({ method: "GET", url: `/v1/assets/${key}` })).headers["content-type"]);
+    }
+    expect(types).toEqual({ "fill-imgref1": "image/jpeg", "node-1_9.svg": "image/svg+xml", "node-1_10.png": "image/png", "figma-reference.png": "image/png" });
+  });
+
+  it("explains Figma failures", async () => {
+    const project = await newProject();
+    const run = async (body: object) => {
+      const res = await call("POST", `/v1/projects/${project.id}/designs/import-figma`, body);
+      return res.status === 202 ? waitForJob(res.body.data.id, (s) => s !== "queued" && s !== "running") : res;
+    };
+    expect(await run({ fileKey: "DENIED", nodeId: "1:2" })).toMatchObject({ status: "failed", error: { code: "unauthorized" } });
+    expect(await run({ fileKey: "LIMITED", nodeId: "1:2" })).toMatchObject({ status: "failed", error: { code: "rate_limited", message: "Figma's rate limit was reached. Try again in 30 seconds." } });
+    expect(await run({ fileKey: "FILEKEY", nodeId: "9:9" })).toMatchObject({ status: "failed", error: { code: "not_found" } });
+    const noNode = await run({ url: "https://www.figma.com/design/FILEKEY/Campaign" });
+    expect(noNode).toMatchObject({ status: 400 });
+    expect((noNode as { body: { error: { message: string } } }).body.error.message).toContain("Copy link to selection");
+    expect(await run({ url: "https://example.com/x" })).toMatchObject({ status: 400 });
+    expect(await run({})).toMatchObject({ status: 400 });
+    expect((await call("POST", "/v1/projects/prj_missing/designs/import-figma", { fileKey: "FILEKEY", nodeId: "1:2" })).status).toBe(404);
+  });
+});
+
+describe("inline job mode", () => {
+  it("runs a job to completion inside submit, with retries, and no queue", async () => {
+    const inline = new JobSystem({ db: handle.db, databaseUrl: "postgres://unused:unused@127.0.0.1:1/none", registry: createEngineRegistry({ db: handle.db, storage, figma: { token: undefined } }), mode: "inline" });
+    const ok = await inline.submit("system.ping", { message: "inline", failUntilAttempt: 1 });
+    expect(ok).toMatchObject({ status: "succeeded", attempts: 2, output: { message: "inline", attempt: 2 } });
+    const failed = await inline.submit("system.ping", { failUntilAttempt: 10 });
+    expect(failed).toMatchObject({ status: "failed", attempts: 3 });
+    const project = (await call("POST", "/v1/projects", { name: "Inline" })).body.data;
+    const noToken = await inline.submit("design.import_figma", { projectId: project.id, fileKey: "FILEKEY", nodeId: "1:2" });
+    expect(noToken).toMatchObject({ status: "failed", error: { code: "validation_error" } });
+    expect(noToken.error!.message).toContain("FIGMA_TOKEN");
+    await inline.stop();
   });
 });

@@ -1,12 +1,15 @@
 import { loadConfig } from "@adengine/core/config";
 import { connect, migrate } from "@adengine/db";
-import { JobSystem, createDefaultRegistry } from "@adengine/jobs";
+import { createEngineRegistry } from "@adengine/engine";
+import { JobSystem } from "@adengine/jobs";
+import { createStorage } from "@adengine/storage";
 
 const config = loadConfig();
 const handle = connect(config.databaseUrl);
 await migrate(handle.db);
 
-const registry = await createDefaultRegistry();
+const storage = createStorage(config.storage, handle.db);
+const registry = createEngineRegistry({ db: handle.db, storage, figma: { token: config.figmaToken } });
 const jobs = new JobSystem({ db: handle.db, databaseUrl: config.databaseUrl, registry });
 await jobs.work();
 console.log(`[worker] processing job types: ${registry.list().map((d) => d.type).join(", ")}`);

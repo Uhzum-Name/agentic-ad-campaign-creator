@@ -13,7 +13,7 @@ import {
   newId,
 } from "@adengine/core";
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { customType, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 /*
  * Hierarchy: Project → Campaign → Creative Direction → Variation → Format → Rendered Asset.
@@ -76,6 +76,10 @@ export const designDocuments = pgTable(
     width: integer("width").notNull(),
     height: integer("height").notNull(),
     document: jsonb("document").$type<DesignDocument>().notNull(),
+    /** The source tool's own render of the design, kept to check our rendering against. */
+    referenceAssetKey: text("reference_asset_key"),
+    /** What the importer did: counts, rasterised nodes, warnings. */
+    importReport: jsonb("import_report").$type<Record<string, unknown>>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -230,3 +234,20 @@ export const agentMessages = pgTable(
   },
   (t) => [index("agent_messages_campaign_idx").on(t.campaignId, t.createdAt)],
 );
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * Object storage kept in PostgreSQL. It lets the API and the worker share
+ * assets without a shared disk and works on hosts with no writable filesystem.
+ * Suited to design assets (KBs to a few MB); large rendered video should move
+ * to an S3-compatible driver behind the same Storage interface.
+ */
+export const storedObjects = pgTable("stored_objects", {
+  key: text("key").primaryKey(),
+  data: bytea("data").notNull(),
+  bytes: integer("bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  contentType: text("content_type").notNull(),
+  createdAt: createdAt(),
+});

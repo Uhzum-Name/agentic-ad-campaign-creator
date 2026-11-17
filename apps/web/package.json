@@ -12,6 +12,8 @@
     "@adengine/api": "workspace:*",
     "@adengine/core": "workspace:*",
     "@adengine/db": "workspace:*",
+    "@adengine/design": "workspace:*",
+    "@adengine/engine": "workspace:*",
     "@adengine/jobs": "workspace:*",
     "@adengine/storage": "workspace:*",
     "fastify": "^5.12.8",

@@ -33,9 +33,15 @@ async function forward(req: Request, path: string[]): Promise<Response> {
     headers,
     ...(body ? { payload: body } : {}),
   });
-  return new Response(res.statusCode === 204 ? null : res.body, {
+  // rawPayload keeps binary responses (stored images) intact.
+  return new Response(res.statusCode === 204 ? null : new Uint8Array(res.rawPayload), {
     status: res.statusCode,
-    headers: { "content-type": String(res.headers["content-type"] ?? "application/json"), "cache-control": "no-store" },
+    headers: {
+      "content-type": String(res.headers["content-type"] ?? "application/json"),
+      "cache-control": String(res.headers["cache-control"] ?? "no-store"),
+      ...(res.headers["content-security-policy"] ? { "content-security-policy": String(res.headers["content-security-policy"]) } : {}),
+      "x-content-type-options": "nosniff",
+    },
   });
 }
 
