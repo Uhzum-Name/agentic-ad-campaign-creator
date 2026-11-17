@@ -17,6 +17,7 @@ export const ID_PREFIX = {
   renderedAsset: "ast",
   job: "job",
   recipe: "rcp",
+  agentMessage: "msg",
 } as const;
 
 export type EntityKind = keyof typeof ID_PREFIX;

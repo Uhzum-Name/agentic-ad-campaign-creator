@@ -84,7 +84,22 @@ The model is source-agnostic; Figma is one importer.
   single shared key; per-user accounts and permissions are milestone 10–12 work.
 
 Endpoints today: projects (CRUD, archive), campaigns (CRUD), briefs (save new
-version, history), jobs (submit, status, cancel), `/health`.
+version, history), campaign workspace (one read for the grid), creative
+directions and variations (create, update status, delete), the campaign thread
+(post, list, acknowledge), jobs (submit, status, cancel), `/health`.
+
+## Workspace and agent panel
+
+The campaign page is a variation grid grouped by creative direction, with a
+persistent side panel. The panel holds the **campaign thread** (`agent_messages`):
+people post direction, which stays "waiting" until an agent acknowledges it;
+agents post replies and activity entries. The grid and thread poll the API
+every few seconds, so work an agent creates through the API appears without a
+reload. Polling is a deliberate simple choice; a push channel can replace it
+behind the same `useResource` hook.
+
+The web app imports only the browser-safe parts of `@adengine/core`
+(`@adengine/core/entities`, `@adengine/core/design`).
 
 ## Background jobs
 
@@ -124,5 +139,6 @@ not implemented.
 
 - No user accounts; a single optional shared API key.
 - No S3 driver.
-- The web app is a one-page shell until milestone 2.
+- Variation cards show production state only; rendering the creative arrives with milestone 3.
+- No side-by-side comparison or export status in the grid yet.
 - Figma access is not wired up; the design model is schema-only until milestone 3.

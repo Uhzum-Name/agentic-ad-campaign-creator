@@ -4,7 +4,7 @@ An agent-native creative production engine with a human-facing workspace. An AI
 agent directs production through a structured engine (REST and MCP); a person
 supervises through a variation grid.
 
-Status: **milestone 1 of 12 complete** (architecture and technical foundation).
+Status: **milestones 1–2 of 12 complete** (technical foundation; workspace with variation grid and agent panel).
 See [docs/architecture.md](docs/architecture.md) for the design and
 [docs/roadmap.md](docs/roadmap.md) for what is and is not built.
 

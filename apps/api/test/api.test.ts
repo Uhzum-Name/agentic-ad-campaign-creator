@@ -154,3 +154,73 @@ describe("jobs", () => {
     expect((await call("GET", "/v1/jobs/job_missing")).status).toBe(404);
   });
 });
+
+describe("workspace: directions, variations and the campaign thread", () => {
+  it("builds the grid hierarchy and supports approval", async () => {
+    const project = (await call("POST", "/v1/projects", { name: "Grid" })).body.data;
+    const campaign = (await call("POST", `/v1/projects/${project.id}/campaigns`, { name: "Launch" })).body.data;
+
+    const empty = (await call("GET", `/v1/campaigns/${campaign.id}/workspace`)).body.data;
+    expect(empty).toMatchObject({ campaign: { id: campaign.id }, brief: null, directions: [] });
+
+    const d1 = (await call("POST", `/v1/campaigns/${campaign.id}/directions`, { name: "Performance", messagingAngle: "Speed" })).body.data;
+    const d2 = (await call("POST", `/v1/campaigns/${campaign.id}/directions`, { name: "Comfort" })).body.data;
+    expect([d1.position, d2.position]).toEqual([0, 1]);
+    expect(d1.status).toBe("proposed");
+
+    const sizes = [{ width: 300, height: 250 }, { width: 728, height: 90, label: "Leaderboard" }];
+    const v1 = (await call("POST", `/v1/directions/${d1.id}/variations`, { name: "Run further", sizes })).body.data;
+    await call("POST", `/v1/directions/${d1.id}/variations`, { name: "Run faster" });
+    expect(v1).toMatchObject({ campaignId: campaign.id, directionId: d1.id, status: "draft", position: 0 });
+    expect(v1.formats.map((f: { width: number; height: number }) => `${f.width}x${f.height}`)).toEqual(["300x250", "728x90"]);
+
+    expect((await call("PATCH", `/v1/variations/${v1.id}`, { status: "approved" })).body.data.status).toBe("approved");
+    expect((await call("PATCH", `/v1/directions/${d2.id}`, { status: "rejected" })).body.data.status).toBe("rejected");
+
+    const ws = (await call("GET", `/v1/campaigns/${campaign.id}/workspace`)).body.data;
+    expect(ws.directions.map((d: { name: string }) => d.name)).toEqual(["Performance", "Comfort"]);
+    expect(ws.directions[0].variations.map((v: { name: string; status: string }) => [v.name, v.status])).toEqual([
+      ["Run further", "approved"],
+      ["Run faster", "draft"],
+    ]);
+    expect(ws.directions[0].variations[0].formats).toHaveLength(2);
+    expect(ws.directions[1].variations).toEqual([]);
+
+    expect((await call("DELETE", `/v1/directions/${d1.id}`)).status).toBe(204);
+    expect((await call("PATCH", `/v1/variations/${v1.id}`, { status: "ready" })).status).toBe(404);
+  });
+
+  it("validates variation input", async () => {
+    const project = (await call("POST", "/v1/projects", { name: "V" })).body.data;
+    const campaign = (await call("POST", `/v1/projects/${project.id}/campaigns`, { name: "C" })).body.data;
+    const d = (await call("POST", `/v1/campaigns/${campaign.id}/directions`, { name: "D" })).body.data;
+    const dup = await call("POST", `/v1/directions/${d.id}/variations`, { name: "x", sizes: [{ width: 1, height: 1 }, { width: 1, height: 1 }] });
+    expect(dup.status).toBe(400);
+    expect((await call("POST", `/v1/directions/${d.id}/variations`, { name: "x", sourceDesignId: "dsn_missing" })).status).toBe(404);
+    expect((await call("PATCH", `/v1/variations/var_missing`, { status: "nope" })).status).toBe(400);
+    expect((await call("POST", `/v1/directions/dir_missing/variations`, { name: "x" })).status).toBe(404);
+  });
+
+  it("keeps a thread where user direction waits until an agent acknowledges it", async () => {
+    const project = (await call("POST", "/v1/projects", { name: "Thread" })).body.data;
+    const campaign = (await call("POST", `/v1/projects/${project.id}/campaigns`, { name: "C" })).body.data;
+    const base = `/v1/campaigns/${campaign.id}/messages`;
+
+    const note = (await call("POST", base, { text: "Make the CTA bolder" })).body.data;
+    expect(note).toMatchObject({ role: "user", kind: "message", acknowledgedAt: null });
+    expect((await call("GET", `${base}?pending=true`)).body.data).toHaveLength(1);
+
+    const acked = (await call("POST", `/v1/messages/${note.id}/acknowledge`)).body.data;
+    expect(acked.acknowledgedAt).toBeTruthy();
+    expect((await call("POST", `/v1/messages/${note.id}/acknowledge`)).body.data.acknowledgedAt).toBe(acked.acknowledgedAt);
+    expect((await call("GET", `${base}?pending=true`)).body.data).toHaveLength(0);
+
+    const activity = (await call("POST", base, { text: "Generated 5 variations", role: "agent", kind: "activity" })).body.data;
+    expect(activity).toMatchObject({ role: "agent", kind: "activity" });
+    expect((await call("POST", `/v1/messages/${activity.id}/acknowledge`)).status).toBe(400);
+    expect((await call("POST", base, { text: "x", role: "user", kind: "activity" })).status).toBe(400);
+    expect((await call("POST", base, { text: "x", role: "system" })).status).toBe(400);
+
+    expect((await call("GET", base)).body.data.map((m: { text: string }) => m.text)).toEqual(["Make the CTA bolder", "Generated 5 variations"]);
+  });
+});

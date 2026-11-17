@@ -5,13 +5,13 @@ import type { FastifyInstance } from "fastify";
 import { type AppDeps, parse } from "../app.ts";
 import { requireProject } from "./projects.ts";
 
-async function requireCampaign(db: Db, id: string) {
+export async function requireCampaign(db: Db, id: string) {
   const [row] = await db.select().from(campaigns).where(eq(campaigns.id, id));
   if (!row) throw AppError.notFound("Campaign", id);
   return row;
 }
 
-async function currentBrief(db: Db, campaignId: string) {
+export async function currentBrief(db: Db, campaignId: string) {
   const [row] = await db.select().from(briefs).where(eq(briefs.campaignId, campaignId)).orderBy(desc(briefs.version)).limit(1);
   return row ?? null;
 }

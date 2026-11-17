@@ -3,7 +3,7 @@
 | # | Milestone | State |
 |---|---|---|
 | 1 | Architecture and technical foundation | Done |
-| 2 | Main interface and workspace | Not started |
+| 2 | Main interface and workspace | Done, except side-by-side comparison and export status (they need rendering and exports) |
 | 3 | Creative document model and design ingestion | Schema only |
 | 4 | Agent orchestration and creative planning | Not started |
 | 5 | Variation generation engine | Not started |

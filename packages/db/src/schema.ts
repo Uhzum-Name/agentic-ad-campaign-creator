@@ -7,6 +7,8 @@ import {
   type ErrorBody,
   type FormatStatus,
   type JobStatus,
+  type MessageKind,
+  type MessageRole,
   type VariationStatus,
   newId,
 } from "@adengine/core";
@@ -208,4 +210,23 @@ export const recipes = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("recipes_project_idx").on(t.projectId)],
+);
+
+/**
+ * The per-campaign thread between people and the connected agent. A user
+ * message is "pending" until an agent acknowledges it; agent and system
+ * entries have no delivery status.
+ */
+export const agentMessages = pgTable(
+  "agent_messages",
+  {
+    id: text("id").primaryKey().$defaultFn(() => newId("agentMessage")),
+    campaignId: text("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+    role: text("role").$type<MessageRole>().notNull(),
+    kind: text("kind").$type<MessageKind>().notNull().default("message"),
+    text: text("text").notNull(),
+    acknowledgedAt: ts("acknowledged_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("agent_messages_campaign_idx").on(t.campaignId, t.createdAt)],
 );
