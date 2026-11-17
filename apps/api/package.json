@@ -1,0 +1,20 @@
+{
+  "name": "@adengine/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@adengine/core": "workspace:*",
+    "@adengine/db": "workspace:*",
+    "@adengine/jobs": "workspace:*",
+    "@adengine/storage": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "fastify": "^5.12.0",
+    "zod": "^4.6.0"
+  }
+}

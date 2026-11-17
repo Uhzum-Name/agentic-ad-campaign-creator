@@ -1,0 +1,16 @@
+{
+  "name": "@adengine/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@adengine/core": "workspace:*",
+    "@adengine/db": "workspace:*",
+    "@adengine/jobs": "workspace:*"
+  }
+}

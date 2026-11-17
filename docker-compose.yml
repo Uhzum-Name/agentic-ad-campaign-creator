@@ -1,0 +1,14 @@
+# Local development database for machines with Docker.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: adengine
+      POSTGRES_PASSWORD: adengine
+      POSTGRES_DB: adengine
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+volumes:
+  pgdata:
