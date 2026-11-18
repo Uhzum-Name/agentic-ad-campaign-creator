@@ -2,7 +2,9 @@
   "name": "agentic-ad-campaign-creator",
   "private": true,
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev:services": "bash scripts/dev-services.sh",
     "db:generate": "pnpm --filter @adengine/db generate",
@@ -14,6 +16,11 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@adengine/core": "workspace:*",
+    "@adengine/db": "workspace:*",
+    "@adengine/engine": "workspace:*",
+    "@adengine/figma": "workspace:*",
+    "@adengine/storage": "workspace:*",
     "@types/node": "^22.10.0",
     "tsx": "^4.23.0",
     "typescript": "~5.9.0",

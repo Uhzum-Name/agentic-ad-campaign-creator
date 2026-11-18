@@ -64,13 +64,41 @@ export const TextStyle = z.object({
   verticalAlign: z.enum(["top", "middle", "bottom"]).default("top"),
   italic: z.boolean().default(false),
   transform: z.enum(["none", "uppercase", "lowercase"]).default("none"),
+  underline: z.boolean().default(false),
+  /** Extra space between paragraphs (text separated by "\n"), in px. */
+  paragraphSpacing: z.number().nonnegative().default(0),
 });
 export type TextStyle = z.infer<typeof TextStyle>;
 
+/**
+ * A styled range of a text layer, e.g. a red "Read more" at the end of a line.
+ * `start`/`end` are string indices into `text` (end exclusive). Only the
+ * properties given differ from the layer's base style.
+ */
+export const TextRun = z.object({
+  start: z.number().int().nonnegative(),
+  end: z.number().int().positive(),
+  // Written out rather than derived from TextStyle: TextStyle's defaults must
+  // not apply here, or every range would reset unspecified properties.
+  style: z.object({
+    fontFamily: z.string().optional(),
+    fontWeight: z.number().optional(),
+    fontSize: z.number().positive().optional(),
+    letterSpacing: z.number().optional(),
+    color: Color.optional(),
+    italic: z.boolean().optional(),
+    underline: z.boolean().optional(),
+  }),
+});
+export type TextRun = z.infer<typeof TextRun>;
+
 export const TextLayer = LayerBase.extend({
   type: z.literal("text"),
+  /** "\n" separates paragraphs; "\u2028" is a line break within a paragraph. */
   text: z.string(),
   style: TextStyle,
+  /** Styled ranges. Dropped automatically when the text is replaced (see applyOverrides). */
+  runs: z.array(TextRun).optional(),
 });
 export type TextLayer = z.infer<typeof TextLayer>;
 
@@ -81,6 +109,11 @@ export const ImageLayer = LayerBase.extend({
   fit: z.enum(["cover", "contain", "fill"]).default("cover"),
   /** Focal point (0..1) kept in view when the image is cropped during resizing. */
   focus: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional(),
+  /**
+   * The region of the source image to show, in fractions of its width and
+   * height, stretched to fill the layer. When set, `fit` and `focus` are ignored.
+   */
+  crop: z.object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() }).optional(),
   cornerRadius: z.number().nonnegative().default(0),
 });
 export type ImageLayer = z.infer<typeof ImageLayer>;
@@ -125,6 +158,8 @@ export const DesignDocument = z.object({
   layers: z.array(Layer),
 });
 export type DesignDocument = z.infer<typeof DesignDocument>;
+/** A document as written by hand, before defaults are filled in. */
+export type DesignDocumentInput = z.input<typeof DesignDocument>;
 
 /** Where a design came from. The original is never modified by our edits. */
 export const DesignSource = z.discriminatedUnion("kind", [

@@ -72,6 +72,52 @@ describe("overrides", () => {
   });
 });
 
+describe("rich text and crops", () => {
+  const rich = DesignDocument.parse({
+    schemaVersion: 1, width: 300, height: 100,
+    layers: [
+      {
+        id: "t", type: "text", name: "Copy", x: 0, y: 0, width: 300, height: 100,
+        text: "First line\u2028wraps\nRead more >\n\nEnd",
+        style: { fontFamily: "Inter", fontSize: 14, color: "#000", paragraphSpacing: 8 },
+        runs: [{ start: 22, end: 28, style: { color: "#e31837", underline: true, fontFamily: "Lora", fontWeight: 600 } }],
+      },
+      { id: "i", type: "image", name: "Photo", x: 0, y: 0, width: 100, height: 100, assetKey: "a.jpg", crop: { x: 0.25, y: 0.1, width: 0.5, height: 0.8 } },
+    ],
+  });
+  const html = renderDocument(rich, { assetUrl: (k) => k });
+
+  it("renders paragraphs with spacing, in-paragraph line breaks and styled ranges", () => {
+    const paras = [...html.matchAll(/<span style="display:block[^"]*">/g)].map((m) => m[0]);
+    expect(paras).toHaveLength(4);
+    expect(paras[0]).not.toContain("margin-top");
+    expect(paras[1]).toContain("margin-top:8px");
+    expect(html).toContain("First line\nwraps");
+    expect(html).toContain('Read <span style="font-family:&#39;Lora&#39;');
+    expect(html).toContain("color:#e31837;text-decoration:underline\">more &gt;</span>");
+    expect(html).toContain("<br>");
+    expect(fontStylesheetUrls(rich)).toEqual([
+      "https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap",
+      "https://fonts.googleapis.com/css2?family=Lora:wght@600&display=swap",
+    ]);
+  });
+
+  it("keeps only the properties a styled range sets", () => {
+    const t = getLayer(rich, "t");
+    expect(t?.type === "text" && t.runs?.[0]?.style).toEqual({ color: "#e31837", underline: true, fontFamily: "Lora", fontWeight: 600 });
+  });
+
+  it("shows only the cropped region of an image", () => {
+    expect(html).toContain("position:absolute;display:block;max-width:none;width:200%;height:125%;left:-50%;top:-12.5%");
+  });
+
+  it("drops styled ranges when the text is replaced, keeps them otherwise", () => {
+    expect(getLayer(applyOverrides(rich, { t: { text: "New copy" } }), "t")).not.toHaveProperty("runs");
+    expect(getLayer(applyOverrides(rich, { t: { style: { color: "#111" } } }), "t")).toHaveProperty("runs");
+    expect(summarizeDesign({ ...rich, layers: [{ ...rich.layers[0]!, text: "short" } as never] }).problems).toEqual(["Layer t has a styled range beyond its text"]);
+  });
+});
+
 describe("rendering", () => {
   const html = renderDocument(doc, { assetUrl: (k) => `/assets/${k}` });
 

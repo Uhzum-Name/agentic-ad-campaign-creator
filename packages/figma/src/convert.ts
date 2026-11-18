@@ -1,5 +1,5 @@
-import type { DesignDocument, Fill, Layer, SemanticRole } from "@adengine/core";
-import type { Box, FigmaColor, FigmaNode, FigmaPaint } from "./client.ts";
+import type { DesignDocument, Fill, Layer, SemanticRole, TextRun } from "@adengine/core";
+import type { Box, FigmaColor, FigmaNode, FigmaPaint, FigmaTypeStyle } from "./client.ts";
 
 /*
  * Converts a Figma node tree into our design document. Pure: no network.
@@ -141,10 +141,17 @@ export function convertFigmaFrame(root: FigmaNode, opts: { assetKeyFor: (name: s
   const imageLayer = (node: FigmaNode, paint: FigmaPaint, box: Box, parent: Box, radius: number): Layer => {
     report.layers.image++;
     const fit = paint.scaleMode === "FIT" ? "contain" : paint.scaleMode === "FILL" || !paint.scaleMode ? "cover" : "fill";
-    if (paint.scaleMode === "TILE" || paint.scaleMode === "STRETCH") {
-      report.warnings.push(`"${node.name}": image scale mode ${paint.scaleMode} is approximated.`);
+    // Figma's "crop" is scale mode STRETCH with a transform naming the visible region.
+    const t = paint.scaleMode === "STRETCH" ? paint.imageTransform : undefined;
+    let crop: { x: number; y: number; width: number; height: number } | undefined;
+    if (t?.[0] && t[1] && t[0].length >= 3 && t[1].length >= 3) {
+      const [a, b, tx] = t[0] as [number, number, number];
+      const [c, d, ty] = t[1] as [number, number, number];
+      if (Math.abs(b) > 1e-4 || Math.abs(c) > 1e-4) report.warnings.push(`"${node.name}": a rotated image crop is shown unrotated.`);
+      if (a > 0 && d > 0) crop = { x: tx, y: ty, width: a, height: d };
     }
-    return { ...base(node, box, parent), type: "image", assetKey: `${fillAsset(paint.imageRef!)}`, fit, cornerRadius: radius };
+    if (paint.scaleMode === "TILE") report.warnings.push(`"${node.name}": a tiled image is shown once, stretched.`);
+    return { ...base(node, box, parent), type: "image", assetKey: `${fillAsset(paint.imageRef!)}`, fit, ...(crop ? { crop } : {}), cornerRadius: radius };
   };
 
   const convert = (node: FigmaNode, parent: Box): Layer | null => {
@@ -169,9 +176,7 @@ export function convertFigmaFrame(root: FigmaNode, opts: { assetKeyFor: (name: s
 
     if (node.type === "TEXT") {
       const s = node.style ?? {};
-      if ((node.characterStyleOverrides ?? []).some((v) => v !== 0)) {
-        report.warnings.push(`"${node.name}": mixed text styles were flattened to the base style.`);
-      }
+      const runs = textRuns(node, s, report);
       if (effects.length) report.warnings.push(`"${node.name}": text effects are not reproduced.`);
       const solid = fills.find((p) => p.type === "SOLID" && p.color);
       if (fills.length !== 1 || !solid) report.warnings.push(`"${node.name}": only a single solid text colour is supported; used ${solid ? "the first solid fill" : "black"}.`);
@@ -192,7 +197,10 @@ export function convertFigmaFrame(root: FigmaNode, opts: { assetKeyFor: (name: s
           verticalAlign: s.textAlignVertical === "CENTER" ? "middle" : s.textAlignVertical === "BOTTOM" ? "bottom" : "top",
           italic: s.italic ?? false,
           transform: s.textCase === "UPPER" ? "uppercase" : s.textCase === "LOWER" ? "lowercase" : "none",
+          underline: s.textDecoration === "UNDERLINE",
+          paragraphSpacing: s.paragraphSpacing ?? 0,
         },
+        ...(runs.length ? { runs } : {}),
       };
     }
 
@@ -221,6 +229,9 @@ export function convertFigmaFrame(root: FigmaNode, opts: { assetKeyFor: (name: s
 
     if (CONTAINERS.has(node.type)) {
       const kids = node.children ?? [];
+      // Artwork built only from vector paths (typically a logo or icon) comes in
+      // as one image rather than one image per path.
+      if (kids.length > 0 && isVectorArtwork(node)) return rasterize(node, parent, "svg", `vector artwork (${countVectors(node)} parts)`);
       if (kids.some((k) => k.isMask && k.visible !== false)) return rasterize(node, parent, "png", "contains a mask");
       if (effects.length) report.warnings.push(`"${node.name}": the container's effects (shadow or blur) are not reproduced.`);
       if (unevenRadii) report.warnings.push(`"${node.name}": different corner radii were simplified to one.`);
@@ -270,6 +281,46 @@ export function convertFigmaFrame(root: FigmaNode, opts: { assetKeyFor: (name: s
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/** Figma's per-character style overrides, grouped into styled ranges. */
+function textRuns(node: FigmaNode, base: FigmaTypeStyle, report: ConversionReport): TextRun[] {
+  const ids = node.characterStyleOverrides ?? [];
+  const table = node.styleOverrideTable ?? {};
+  const runs: TextRun[] = [];
+  let i = 0;
+  while (i < ids.length) {
+    const id = ids[i]!;
+    let j = i + 1;
+    while (j < ids.length && ids[j] === id) j++;
+    if (id !== 0) {
+      const o = table[String(id)];
+      if (!o) report.warnings.push(`"${node.name}": a text style override (${id}) was missing and ignored.`);
+      else {
+        const style: TextRun["style"] = {};
+        if (o.fontFamily && o.fontFamily !== base.fontFamily) style.fontFamily = o.fontFamily;
+        if (o.fontWeight !== undefined && o.fontWeight !== base.fontWeight) style.fontWeight = o.fontWeight;
+        if (o.fontSize !== undefined && o.fontSize !== base.fontSize) style.fontSize = o.fontSize;
+        if (o.letterSpacing !== undefined && o.letterSpacing !== base.letterSpacing) style.letterSpacing = round(o.letterSpacing);
+        if (o.italic !== undefined && o.italic !== (base.italic ?? false)) style.italic = o.italic;
+        if (o.textDecoration !== undefined && (o.textDecoration === "UNDERLINE") !== (base.textDecoration === "UNDERLINE")) style.underline = o.textDecoration === "UNDERLINE";
+        const fill = visiblePaints(o.fills).find((p) => p.type === "SOLID" && p.color);
+        if (fill?.color) style.color = rgba(fill.color, fill.opacity ?? 1);
+        if (Object.keys(style).length) runs.push({ start: i, end: j, style });
+      }
+    }
+    i = j;
+  }
+  return runs;
+}
+
+function isVectorArtwork(node: FigmaNode): boolean {
+  const kids = (node.children ?? []).filter((k) => k.visible !== false);
+  return kids.length > 0 && kids.every((k) => VECTORS.has(k.type) || (CONTAINERS.has(k.type) && isVectorArtwork(k)));
+}
+
+function countVectors(node: FigmaNode): number {
+  return (node.children ?? []).reduce((n, k) => n + (VECTORS.has(k.type) ? 1 : countVectors(k)), 0);
+}
 
 /** If no layer was named as a headline, the largest visible text is treated as one. */
 function inferMissingRoles(layers: Layer[], report: ConversionReport): void {

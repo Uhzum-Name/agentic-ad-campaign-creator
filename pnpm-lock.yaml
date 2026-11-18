@@ -8,6 +8,21 @@ importers:
 
   .:
     devDependencies:
+      '@adengine/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@adengine/db':
+        specifier: workspace:*
+        version: link:packages/db
+      '@adengine/engine':
+        specifier: workspace:*
+        version: link:packages/engine
+      '@adengine/figma':
+        specifier: workspace:*
+        version: link:packages/figma
+      '@adengine/storage':
+        specifier: workspace:*
+        version: link:packages/storage
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.5

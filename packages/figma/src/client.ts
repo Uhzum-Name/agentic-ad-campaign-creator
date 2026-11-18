@@ -39,17 +39,22 @@ export interface FigmaNode {
   children?: FigmaNode[];
   characters?: string;
   characterStyleOverrides?: number[];
-  style?: {
-    fontFamily?: string;
-    fontWeight?: number;
-    fontSize?: number;
-    lineHeightPx?: number;
-    letterSpacing?: number;
-    textAlignHorizontal?: string;
-    textAlignVertical?: string;
-    italic?: boolean;
-    textCase?: string;
-  };
+  styleOverrideTable?: Record<string, FigmaTypeStyle>;
+  style?: FigmaTypeStyle;
+}
+export interface FigmaTypeStyle {
+  fontFamily?: string;
+  fontWeight?: number;
+  fontSize?: number;
+  lineHeightPx?: number;
+  letterSpacing?: number;
+  paragraphSpacing?: number;
+  textAlignHorizontal?: string;
+  textAlignVertical?: string;
+  italic?: boolean;
+  textCase?: string;
+  textDecoration?: string;
+  fills?: FigmaPaint[];
 }
 export interface Box {
   x: number;
@@ -72,6 +77,8 @@ export interface FigmaPaint {
   gradientStops?: { position: number; color: FigmaColor }[];
   scaleMode?: string;
   imageRef?: string;
+  /** For scaleMode STRETCH: [[a, b, tx], [c, d, ty]], the visible part of the image. */
+  imageTransform?: number[][];
 }
 
 /** Accepts a Figma design link copied with "Copy link to selection". */

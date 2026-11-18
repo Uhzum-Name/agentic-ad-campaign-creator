@@ -331,6 +331,8 @@ describe("designs", () => {
     // The node Figma could not render was left out and reported.
     expect(design.document.layers.map((l: { name: string }) => l.name)).not.toContain("Broken star");
     expect(design.importReport.warnings.join(" ")).toContain("render of node 1:14");
+    // Inter is a web font, so no font warning is raised.
+    expect(design.importReport.warnings.join(" ")).not.toContain("font");
     expect(design.summary.texts.map((t: { text: string }) => t.text)).toEqual(["Go further", "Built for the long way round.", "Shop now", "draft"]);
 
     const types: Record<string, string> = {};

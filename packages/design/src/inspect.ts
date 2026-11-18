@@ -120,7 +120,12 @@ export function summarizeDesign(doc: DesignDocument): DesignSummary {
     seen.add(l.id);
   }
   walkLayers(doc, (layer) => {
-    if (layer.type === "text") fonts.add(layer.style.fontFamily);
+    if (layer.type !== "text") return;
+    fonts.add(layer.style.fontFamily);
+    for (const r of layer.runs ?? []) {
+      if (r.style.fontFamily) fonts.add(r.style.fontFamily);
+      if (r.end > layer.text.length) problems.push(`Layer ${layer.id} has a styled range beyond its text`);
+    }
   });
   return {
     width: doc.width,

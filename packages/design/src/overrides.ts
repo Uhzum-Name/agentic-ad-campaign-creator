@@ -4,6 +4,7 @@ import type { DesignDocument, Layer } from "@adengine/core/design";
  * Overrides are patches keyed by layer id, applied on top of a source design
  * without modifying it. A patch shallow-merges into the layer; `style` (text)
  * merges one level deeper so a single style property can change on its own.
+ * Replacing a text layer's `text` drops its styled `runs` unless new runs are given.
  * Identity fields (`id`, `type`, `children`) cannot be overridden.
  */
 export type LayerOverrides = Record<string, Record<string, unknown>>;
@@ -24,8 +25,11 @@ export function applyOverrides(doc: DesignDocument, ...overrideSets: (LayerOverr
       if (patch) {
         const clean = Object.fromEntries(Object.entries(patch).filter(([k]) => !PROTECTED.has(k)));
         next = { ...layer, ...clean } as Layer;
-        if (layer.type === "text" && clean.style && typeof clean.style === "object") {
-          (next as typeof layer).style = { ...layer.style, ...(clean.style as object) };
+        if (layer.type === "text") {
+          const text = next as typeof layer;
+          if (clean.style && typeof clean.style === "object") text.style = { ...layer.style, ...(clean.style as object) };
+          // New wording invalidates styled ranges, which index into the old text.
+          if ("text" in clean && !("runs" in clean) && clean.text !== layer.text) delete text.runs;
         }
       }
       return next.type === "group" ? { ...next, children: patchLayers(next.children) } : next;

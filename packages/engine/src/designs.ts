@@ -1,6 +1,6 @@
 import { AppError, DesignDocument, type DesignSource, type Layer, newId } from "@adengine/core";
 import { type Db, designDocuments, projects } from "@adengine/db";
-import { summarizeDesign } from "@adengine/design";
+import { fontStylesheetUrls, fontsUsed, summarizeDesign } from "@adengine/design";
 import { FigmaClient, type FetchLike, convertFigmaFrame } from "@adengine/figma";
 import type { Storage } from "@adengine/storage";
 import { desc, eq } from "drizzle-orm";
@@ -75,6 +75,7 @@ export async function importFixture({ db, storage }: DesignDeps, input: { projec
     keys[file] = `designs/${id}/${file}`;
     await storage.put(keys[file], Buffer.from(source), "image/svg+xml");
   }
+  // Fixture layers are written without defaults; they are validated after resolving.
   const resolve = (layers: Layer[]): Layer[] =>
     layers.map((l) => {
       if (l.type === "group") return { ...l, children: resolve(l.children) };
@@ -84,7 +85,7 @@ export async function importFixture({ db, storage }: DesignDeps, input: { projec
       if (!key) throw new Error(`Fixture ${fixture.name} references a missing asset: ${l.assetKey}`);
       return { ...l, assetKey: key };
     });
-  const document = validateDocument({ ...fixture.document, layers: resolve(fixture.document.layers) });
+  const document = validateDocument({ ...fixture.document, layers: resolve(fixture.document.layers as Layer[]) });
   return insertDesign(db, { id, projectId: input.projectId, name: fixture.title, source: { kind: "fixture", name: fixture.name }, document });
 }
 
@@ -172,6 +173,9 @@ export async function importFigmaDesign(
       return [l.type === "group" ? { ...l, children: prune(l.children) } : l];
     });
 
+  await onProgress(0.92, "Checking fonts");
+  report.warnings.push(...(await checkWebFonts(document, figma.fetch)));
+
   await onProgress(0.95, "Saving the design");
   return insertDesign(db, {
     id,
@@ -182,4 +186,29 @@ export async function importFigmaDesign(
     ...(referenceAssetKey ? { referenceAssetKey } : {}),
     importReport: report as unknown as Record<string, unknown>,
   });
+}
+
+/**
+ * Fonts are loaded from Google Fonts by family name. A family it does not host
+ * (typically a licensed brand font) falls back to a system font, so text may
+ * look and wrap differently from the original. This says so up front.
+ */
+async function checkWebFonts(doc: DesignDocument, fetchImpl?: FetchLike): Promise<string[]> {
+  const doFetch = fetchImpl ?? ((url: string) => fetch(url));
+  const families = fontsUsed(doc).map((f) => f.family);
+  const urls = fontStylesheetUrls(doc);
+  const warnings: string[] = [];
+  await Promise.all(
+    families.map(async (family, i) => {
+      try {
+        const res = await doFetch(urls[i]!);
+        if (res.status === 400 || res.status === 404) {
+          warnings.push(`The font "${family}" is not available as a web font, so its text is shown in a substitute font and may wrap differently from Figma. Upload the font files to fix this.`);
+        }
+      } catch {
+        warnings.push(`Could not check whether the font "${family}" is available as a web font.`);
+      }
+    }),
+  );
+  return warnings.sort();
 }

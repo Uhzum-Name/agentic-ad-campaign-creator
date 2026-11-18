@@ -18,14 +18,15 @@ export const FIGMA_FRAME: FigmaNode = {
   clipsContent: true,
   fills: [solid(0.05, 0.1, 0.2)],
   children: [
-    { id: "1:3", name: "Photo", type: "RECTANGLE", absoluteBoundingBox: box(0, 0, 300, 250), fills: [{ type: "IMAGE", scaleMode: "FILL", imageRef: "img:ref/1" }] },
+    { id: "1:3", name: "Photo", type: "RECTANGLE", absoluteBoundingBox: box(0, 0, 300, 250), fills: [{ type: "IMAGE", scaleMode: "STRETCH", imageRef: "img:ref/1", imageTransform: [[0.5, 0, 0.25], [0, 0.4, 0.3]] }] },
     {
       id: "1:4", name: "Big words", type: "TEXT", absoluteBoundingBox: box(20, 24, 200, 64), characters: "Go further", fills: [solid(1, 1, 1)],
       style: { fontFamily: "Inter", fontWeight: 800, fontSize: 30, lineHeightPx: 33, letterSpacing: -0.5, textAlignHorizontal: "LEFT", textAlignVertical: "TOP" },
     },
     {
       id: "1:5", name: "Body copy", type: "TEXT", absoluteBoundingBox: box(20, 96, 180, 30), characters: "Built for the long way round.", fills: [solid(0.8, 0.85, 0.9, 0.9)],
-      characterStyleOverrides: [0, 0, 1, 1], style: { fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeightPx: 16.8, textAlignHorizontal: "CENTER", textCase: "UPPER", italic: true },
+      characterStyleOverrides: [0, 0, 1, 1, 0, 2], styleOverrideTable: { "1": { fontWeight: 700, fills: [solid(1, 0, 0)], textDecoration: "UNDERLINE" } },
+      style: { fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeightPx: 16.8, paragraphSpacing: 6, textAlignHorizontal: "CENTER", textCase: "UPPER", italic: true },
     },
     {
       id: "1:6", name: "CTA Button", type: "FRAME", absoluteBoundingBox: box(20, 190, 120, 40), clipsContent: false, fills: [],
@@ -41,6 +42,13 @@ export const FIGMA_FRAME: FigmaNode = {
     {
       id: "1:13", name: "Glow", type: "ELLIPSE", absoluteBoundingBox: box(150, 100, 40, 40), opacity: 0.5,
       fills: [{ type: "GRADIENT_LINEAR", gradientHandlePositions: [{ x: 0, y: 0.5 }, { x: 1, y: 0.5 }, { x: 0, y: 1 }], gradientStops: [{ position: 0, color: { r: 1, g: 1, b: 0, a: 1 } }, { position: 1, color: { r: 1, g: 0, b: 0, a: 0 } }] }],
+    },
+    {
+      id: "1:15", name: "Brand mark", type: "FRAME", absoluteBoundingBox: box(200, 220, 90, 20), fills: [],
+      children: [
+        { id: "1:16", name: "Vector", type: "VECTOR", absoluteBoundingBox: box(200, 220, 20, 20) },
+        { id: "1:17", name: "Wordmark", type: "GROUP", absoluteBoundingBox: box(225, 222, 65, 16), children: [{ id: "1:18", name: "Vector", type: "VECTOR", absoluteBoundingBox: box(225, 222, 65, 16) }] },
+      ],
     },
     { id: "1:14", name: "Broken star", type: "STAR", absoluteBoundingBox: box(5, 5, 10, 10), fills: [solid(1, 1, 0)] },
   ],
@@ -58,6 +66,7 @@ export const figmaCalls: string[] = [];
 export const figmaFetch: FetchLike = async (url, init) => {
   figmaCalls.push(url);
   const u = new URL(url);
+  if (u.hostname === "fonts.googleapis.com") return new Response("/* css */", { status: u.searchParams.get("family")?.startsWith("Inter") ? 200 : 400 });
   if (u.hostname === "img.test") {
     return new Response(u.pathname.startsWith("/svg") ? SVG : u.pathname.startsWith("/fill") ? JPEG : PNG);
   }

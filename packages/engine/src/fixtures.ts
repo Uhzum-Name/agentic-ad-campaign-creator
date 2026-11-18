@@ -1,4 +1,4 @@
-import type { DesignDocument } from "@adengine/core";
+import type { DesignDocumentInput } from "@adengine/core";
 
 /*
  * Built-in sample designs. They exist so the design model, renderer and the
@@ -12,7 +12,7 @@ export interface Fixture {
   description: string;
   /** Asset file name → SVG source. Referenced from the document as `{{asset:<file>}}`. */
   assets: Record<string, string>;
-  document: DesignDocument;
+  document: DesignDocumentInput;
 }
 
 const svg = (w: number, h: number, body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${body}</svg>`;

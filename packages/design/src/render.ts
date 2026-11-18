@@ -1,4 +1,4 @@
-import type { DesignDocument, Fill, Layer } from "@adengine/core/design";
+import type { DesignDocument, Fill, Layer, TextLayer } from "@adengine/core/design";
 
 /**
  * The one renderer. It turns a design document into plain HTML with inline
@@ -42,6 +42,48 @@ function style(decls: Record<string, string | number | undefined | false>): stri
   );
 }
 
+const pct = (n: number) => `${Math.round(n * 1_000_000) / 10_000}%`;
+
+/** Paragraphs as blocks (with paragraph spacing), styled runs as inline spans. */
+function renderText(layer: TextLayer): string {
+  const runs = (layer.runs ?? []).filter((r) => r.end > r.start).sort((a, b) => a.start - b.start);
+  const spacing = layer.style.paragraphSpacing;
+  const out: string[] = [];
+  let offset = 0;
+  layer.text.split("\n").forEach((para, i) => {
+    const start = offset;
+    const end = start + para.length;
+    offset = end + 1;
+    const parts: string[] = [];
+    let cursor = start;
+    for (const r of runs) {
+      const a = Math.max(r.start, start);
+      const b = Math.min(r.end, end);
+      if (b <= a) continue;
+      if (a > cursor) parts.push(esc(layer.text.slice(cursor, a)));
+      parts.push(`<span style="${runStyle(r.style)}">${esc(layer.text.slice(a, b))}</span>`);
+      cursor = b;
+    }
+    if (cursor < end) parts.push(esc(layer.text.slice(cursor, end)));
+    const content = parts.join("").replace(/\u2028/g, "\n") || "<br>";
+    const css = style({ display: "block", "margin-top": i > 0 && spacing > 0 && px(spacing) });
+    out.push(`<span style="${css}">${content}</span>`);
+  });
+  return out.join("");
+}
+
+function runStyle(s: NonNullable<TextLayer["runs"]>[number]["style"]): string {
+  return style({
+    "font-family": s.fontFamily !== undefined && fontStack(s.fontFamily),
+    "font-weight": s.fontWeight,
+    "font-size": s.fontSize !== undefined && px(s.fontSize),
+    "font-style": s.italic === undefined ? undefined : s.italic ? "italic" : "normal",
+    "letter-spacing": s.letterSpacing !== undefined && px(s.letterSpacing),
+    color: s.color !== undefined && color(s.color),
+    "text-decoration": s.underline === undefined ? undefined : s.underline ? "underline" : "none",
+  });
+}
+
 function box(layer: Layer): Record<string, string | undefined | false> {
   return {
     position: "absolute",
@@ -79,15 +121,27 @@ function renderLayer(layer: Layer, opts: RenderOptions): string {
         color: color(s.color),
         "text-align": s.align,
         "text-transform": s.transform !== "none" && s.transform,
+        "text-decoration": s.underline && "underline",
         "white-space": "pre-wrap",
         "overflow-wrap": "break-word",
       });
-      return `<div ${attrs(layer)} style="${css}"><span>${esc(layer.text)}</span></div>`;
+      return `<div ${attrs(layer)} style="${css}"><div>${renderText(layer)}</div></div>`;
     }
     case "image": {
       const focus = layer.focus ? `${layer.focus.x * 100}% ${layer.focus.y * 100}%` : undefined;
       const css = style({ ...box(layer), overflow: "hidden", "border-radius": layer.cornerRadius > 0 && px(layer.cornerRadius) });
-      const img = style({ display: "block", width: "100%", height: "100%", "object-fit": layer.fit, "object-position": focus });
+      const c = layer.crop;
+      const img = c
+        ? style({
+            position: "absolute",
+            display: "block",
+            "max-width": "none",
+            width: pct(1 / c.width),
+            height: pct(1 / c.height),
+            left: pct(-c.x / c.width),
+            top: pct(-c.y / c.height),
+          })
+        : style({ display: "block", width: "100%", height: "100%", "object-fit": layer.fit, "object-position": focus });
       return `<div ${attrs(layer)} style="${css}"><img src="${esc(opts.assetUrl(layer.assetKey))}" alt="" draggable="false" style="${img}"></div>`;
     }
     case "shape": {
@@ -129,10 +183,13 @@ export function fontsUsed(doc: DesignDocument): { family: string; weights: numbe
   const visit = (layers: Layer[]) => {
     for (const l of layers) {
       if (l.type === "text") {
-        const entry = map.get(l.style.fontFamily) ?? { weights: new Set<number>(), italic: false };
-        entry.weights.add(l.style.fontWeight);
-        entry.italic ||= l.style.italic;
-        map.set(l.style.fontFamily, entry);
+        const uses = [l.style, ...(l.runs ?? []).map((r) => ({ ...l.style, ...r.style }))];
+        for (const u of uses) {
+          const entry = map.get(u.fontFamily) ?? { weights: new Set<number>(), italic: false };
+          entry.weights.add(u.fontWeight);
+          entry.italic ||= u.italic;
+          map.set(u.fontFamily, entry);
+        }
       } else if (l.type === "group") visit(l.children);
     }
   };
