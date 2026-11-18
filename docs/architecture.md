@@ -24,7 +24,7 @@ for the other to work.
 - **worker** — executes jobs. Can be scaled or restarted independently.
 - **web** — UI only. Talks to the API through a same-origin `/api/*` proxy.
 
-## Where the intelligence lives
+## Where the intelligence lives (see also "Agent: MCP server and planning")
 
 The engine has **no built-in LLM dependency and needs no model API key**.
 The agent is whichever MCP client the user connects (for example Claude Code
@@ -122,6 +122,44 @@ declared with `@font-face` and never requested from Google Fonts; other
 families still are. A Figma import records which of its fonts Google Fonts
 does not host (`importReport.webFontsUnavailable`), and the design viewer shows
 each font as Uploaded, Web font, Missing or Not uploaded.
+
+## Agent: MCP server and planning
+
+The agent is an external MCP client (Claude Code, the Claude apps). The engine
+exposes MCP over stateless Streamable HTTP at `POST /api/mcp` on the web app
+(and `POST /mcp` on the standalone API server). Every tool is a thin call to the
+REST API in-process (`packages/mcp`), so agent and web app share validation.
+The server's instructions describe the working loop: read context, analyse the
+brief, ask questions, propose a plan, wait for the decision.
+
+Tools today: `list_projects`, `create_project`, `get_project`, `update_project`,
+`list_project_assets`, `create_campaign`, `get_campaign_context`, `save_brief`,
+`analyze_brief`, `ask_clarifying_questions`, `get_pending_input`, `post_update`,
+`generate_creative_plan`, `approve_creative_plan`, `import_figma_design`,
+`add_sample_design`, `inspect_design`, `list_design_layers`, `get_job_status`,
+`cancel_job`. Production tools (variations, editing, animation, resizing,
+export, recipes) are added with their milestones.
+
+Planning (`packages/engine/src/planning.ts`, schemas in `packages/core/src/planning.ts`):
+
+- **Context:** `GET /campaigns/:id/context` returns the brief and analysis,
+  designs with layer roles and text, fonts, directions, plans, recent thread and
+  pending input in one read.
+- **Brief analysis:** structured (`BriefAnalysis`), stored on the brief version.
+- **Clarifying questions:** thread entries of kind `question` with options; the
+  person answers with one click or text (`POST /messages/:id/answer`).
+- **Pending input:** the person's messages, answers and plan decisions the agent
+  has not picked up; reading with `markRead` marks them "Picked up by the agent".
+- **Plans:** each proposal (`CreativePlan`) is a new version with a computed
+  estimate (variations × sizes × outputs, rough render time). A new proposal
+  supersedes an undecided one. The person approves or requests changes in the
+  workspace; approval creates the plan's directions (status approved, with
+  planned variation counts and what varies). A later approval removes earlier
+  plan directions that have no variations. The agent may approve only with the
+  person's quoted instruction.
+
+The MCP endpoint uses the REST API's authentication: with `API_KEY` set, the
+client must send `Authorization: Bearer <key>`. Without it the endpoint is open.
 
 ## API conventions
 

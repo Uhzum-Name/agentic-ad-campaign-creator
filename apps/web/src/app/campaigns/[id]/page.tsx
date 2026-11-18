@@ -3,8 +3,9 @@
 import { CAMPAIGN_STATUSES, type CampaignStatus } from "@adengine/core/entities";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AgentPanel } from "../../../components/AgentPanel";
+import { PlanPanel } from "../../../components/PlanPanel";
 import { ProjectFontsProvider } from "../../../components/ProjectFonts";
 import { VariationGrid } from "../../../components/VariationGrid";
 import { EmptyState, ErrorNote, Skeleton, TopBar, statusLabel } from "../../../components/ui";
@@ -17,6 +18,19 @@ export default function CampaignWorkspacePage() {
   const campaign = workspace.data?.campaign;
   const project = useResource<Project>(campaign ? `/projects/${campaign.projectId}` : null);
   const [statusError, setStatusError] = useState<string>();
+  const planRef = useRef<HTMLElement>(null);
+  const plan = workspace.data?.latestPlan ?? null;
+  // A plan awaiting approval opens expanded; once decided it collapses to its summary.
+  const [planExpanded, setPlanExpanded] = useState(false);
+  const planKey = plan ? `${plan.id}:${plan.status}` : "";
+  useEffect(() => {
+    if (plan) setPlanExpanded(plan.status === "proposed");
+  }, [planKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function showPlan() {
+    setPlanExpanded(true);
+    requestAnimationFrame(() => planRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
 
   async function setStatus(status: CampaignStatus) {
     setStatusError(undefined);
@@ -78,7 +92,7 @@ export default function CampaignWorkspacePage() {
       </TopBar>
 
       <div className="flex min-h-0 flex-1">
-        {campaign && <AgentPanel campaignId={campaign.id} brief={workspace.data!.brief} onBriefSaved={workspace.refresh} />}
+        {campaign && <AgentPanel campaignId={campaign.id} brief={workspace.data!.brief} onBriefSaved={workspace.refresh} onShowPlan={showPlan} />}
         <main className="min-w-0 flex-1 overflow-y-auto p-4">
           {statusError && <ErrorNote>{statusError}</ErrorNote>}
           {workspace.error && !workspace.data && <ErrorNote>{workspace.error.message}</ErrorNote>}
@@ -87,6 +101,11 @@ export default function CampaignWorkspacePage() {
             <div className="space-y-4">
               <Skeleton className="h-8 w-72" />
               <Skeleton className="h-64" />
+            </div>
+          )}
+          {workspace.data && plan && (
+            <div className="mb-4">
+              <PlanPanel ref={planRef} plan={plan} workspace={workspace.data} onChange={workspace.refresh} expanded={planExpanded} onToggle={() => setPlanExpanded((v) => !v)} />
             </div>
           )}
           {workspace.data && (

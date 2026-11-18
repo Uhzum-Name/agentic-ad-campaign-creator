@@ -2,6 +2,7 @@
 
 import type { CampaignStatus, DirectionStatus, FormatStatus, MessageKind, MessageRole, VariationStatus } from "@adengine/core/entities";
 import type { DesignDocument } from "@adengine/core/design";
+import type { BriefAnalysis, ClarifyingQuestion, CreativePlan, PlanEstimate, PlanStatus } from "@adengine/core/planning";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface Project {
@@ -24,6 +25,22 @@ export interface Brief {
   id: string;
   version: number;
   text: string;
+  analysis: BriefAnalysis | null;
+  analyzedAt: string | null;
+  createdAt: string;
+}
+export interface Plan {
+  id: string;
+  campaignId: string;
+  version: number;
+  status: PlanStatus;
+  plan: CreativePlan;
+  estimate: PlanEstimate;
+  briefVersion: number | null;
+  feedback: string | null;
+  decidedBy: "user" | "agent" | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
   createdAt: string;
 }
 export interface Format {
@@ -49,6 +66,8 @@ export interface Direction {
   messagingAngle: string | null;
   visualTreatment: string | null;
   status: DirectionStatus;
+  plannedVariations: number | null;
+  varyElements: string[] | null;
   variations: Variation[];
 }
 export interface Design {
@@ -124,6 +143,7 @@ export interface Workspace {
   campaign: Campaign;
   designs: Record<string, Pick<Design, "id" | "name" | "width" | "height" | "document">>;
   brief: Brief | null;
+  latestPlan: Plan | null;
   directions: Direction[];
 }
 export interface Message {
@@ -132,6 +152,10 @@ export interface Message {
   kind: MessageKind;
   text: string;
   acknowledgedAt: string | null;
+  question: ClarifyingQuestion | null;
+  answer: string | null;
+  answeredAt: string | null;
+  planId: string | null;
   createdAt: string;
 }
 

@@ -4,7 +4,7 @@ An agent-native creative production engine with a human-facing workspace. An AI
 agent directs production through a structured engine (REST and MCP); a person
 supervises through a variation grid.
 
-Status: **milestones 1–3 of 12 built** (technical foundation; workspace; design model, renderer and Figma import).
+Status: **milestones 1–4 of 12 built** (foundation; workspace; design model and Figma import; agent planning over MCP).
 See [docs/architecture.md](docs/architecture.md) for the design and
 [docs/roadmap.md](docs/roadmap.md) for what is and is not built.
 
@@ -32,6 +32,15 @@ pnpm dev:worker       # background job processor (separate terminal)
 `pnpm dev:api` runs the API as a standalone server on :4000; set `API_URL` for
 the web app to use it.
 
+## Connect an agent
+
+The MCP endpoint is `<site>/api/mcp` (locally `http://localhost:3000/api/mcp`).
+In Claude Code:
+
+```bash
+claude mcp add --transport http creative-engine http://localhost:3000/api/mcp
+```
+
 ## Test
 
 ```bash
@@ -52,6 +61,7 @@ pnpm test             # integration tests run against TEST_DATABASE_URL
 | `packages/design` | Layer inspection, override application and the HTML renderer (browser-safe) |
 | `packages/fonts` | Reads family, weight and style from font files (TTF, OTF, WOFF, WOFF2) |
 | `packages/figma` | Figma REST client and Figma-to-design converter |
+| `packages/mcp` | The MCP server external agents connect to |
 | `packages/engine` | Sample designs, design ingestion, and the engine's job types |
 | `packages/jobs` | Durable background jobs (pg-boss dispatch, `jobs` table as source of truth) |
 | `apps/api` | REST API |

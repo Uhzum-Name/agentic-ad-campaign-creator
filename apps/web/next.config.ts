@@ -20,7 +20,7 @@ if (existsSync(rootEnv)) {
 const apiUrl = process.env.API_URL;
 
 const config: NextConfig = {
-  transpilePackages: ["@adengine/core", "@adengine/db", "@adengine/jobs", "@adengine/storage", "@adengine/api", "@adengine/design", "@adengine/engine", "@adengine/figma"],
+  transpilePackages: ["@adengine/core", "@adengine/db", "@adengine/jobs", "@adengine/storage", "@adengine/api", "@adengine/design", "@adengine/engine", "@adengine/figma", "@adengine/fonts", "@adengine/mcp"],
   async rewrites() {
     if (!apiUrl) return [];
     return { beforeFiles: [{ source: "/api/:path*", destination: `${apiUrl}/v1/:path*` }], afterFiles: [], fallback: [] };

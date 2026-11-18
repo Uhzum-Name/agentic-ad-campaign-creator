@@ -6,8 +6,8 @@ import {
   UpdateDirectionInput,
   UpdateVariationInput,
 } from "@adengine/core";
-import { type Db, agentMessages, creativeDirections, designDocuments, variationFormats, variations } from "@adengine/db";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { type Db, agentMessages, creativeDirections, creativePlans, designDocuments, variationFormats, variations } from "@adengine/db";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { type AppDeps, parse } from "../app.ts";
 import { currentBrief, requireCampaign } from "./campaigns.ts";
@@ -42,18 +42,26 @@ export function creativeRoutes(app: FastifyInstance, { db }: AppDeps): void {
     const formats = allVariations.length
       ? await db.select().from(variationFormats).where(inArray(variationFormats.variationId, allVariations.map((v) => v.id))).orderBy(asc(variationFormats.createdAt))
       : [];
-    const designIds = [...new Set(allVariations.map((v) => v.sourceDesignId).filter((id): id is string => id !== null))];
+    const [latestPlan] = await db.select().from(creativePlans).where(eq(creativePlans.campaignId, campaign.id)).orderBy(desc(creativePlans.version)).limit(1);
+    const designIds = [
+      ...new Set(
+        [...allVariations.map((v) => v.sourceDesignId), ...(latestPlan?.plan.directions.map((d) => d.sourceDesignId) ?? [])].filter((id): id is string => Boolean(id)),
+      ),
+    ];
     const designs = designIds.length
       ? await db
           .select({ id: designDocuments.id, name: designDocuments.name, width: designDocuments.width, height: designDocuments.height, document: designDocuments.document })
           .from(designDocuments)
           .where(inArray(designDocuments.id, designIds))
       : [];
+
     return {
       data: {
         campaign,
         brief,
-        /** Source designs referenced by the variations, keyed by id, so the grid can render them. */
+        /** The newest plan version, whatever its status. */
+        latestPlan: latestPlan ?? null,
+        /** Source designs referenced by the variations and the latest plan, keyed by id. */
         designs: Object.fromEntries(designs.map((d) => [d.id, d])),
         directions: directions.map((d) => ({
           ...d,

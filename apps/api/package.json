@@ -14,6 +14,8 @@
     "@adengine/design": "workspace:*",
     "@adengine/engine": "workspace:*",
     "@adengine/figma": "workspace:*",
+    "@adengine/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@adengine/jobs": "workspace:*",
     "@adengine/storage": "workspace:*",
     "drizzle-orm": "^0.45.0",
@@ -21,6 +23,7 @@
     "zod": "^4.6.0"
   },
   "exports": {
-    ".": "./src/app.ts"
+    ".": "./src/app.ts",
+    "./mcp": "./src/mcp.ts"
   }
 }

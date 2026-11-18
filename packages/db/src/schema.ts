@@ -9,6 +9,11 @@ import {
   type JobStatus,
   type MessageKind,
   type MessageRole,
+  type BriefAnalysis,
+  type ClarifyingQuestion,
+  type CreativePlan,
+  type PlanEstimate,
+  type PlanStatus,
   type VariationStatus,
   newId,
 } from "@adengine/core";
@@ -59,8 +64,9 @@ export const briefs = pgTable(
     campaignId: text("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
     text: text("text").notNull(),
-    /** Structured interpretation produced by the agent (milestone 4). */
-    analysis: jsonb("analysis").$type<Record<string, unknown>>(),
+    /** Structured interpretation submitted by the agent. */
+    analysis: jsonb("analysis").$type<BriefAnalysis>(),
+    analyzedAt: ts("analyzed_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("briefs_campaign_version_idx").on(t.campaignId, t.version)],
@@ -97,6 +103,12 @@ export const creativeDirections = pgTable(
     visualTreatment: text("visual_treatment"),
     status: text("status").$type<DirectionStatus>().notNull().default("proposed"),
     position: integer("position").notNull().default(0),
+    /** The approved plan this direction came from, and what that plan asked of it. */
+    planId: text("plan_id"),
+    plannedVariations: integer("planned_variations"),
+    varyElements: jsonb("vary_elements").$type<string[]>(),
+    sourceDesignId: text("source_design_id"),
+    sampleHeadlines: jsonb("sample_headlines").$type<string[]>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -230,6 +242,12 @@ export const agentMessages = pgTable(
     kind: text("kind").$type<MessageKind>().notNull().default("message"),
     text: text("text").notNull(),
     acknowledgedAt: ts("acknowledged_at"),
+    /** kind "question": the question, its options, and the person's answer. */
+    question: jsonb("question").$type<ClarifyingQuestion>(),
+    answer: text("answer"),
+    answeredAt: ts("answered_at"),
+    /** kind "plan": the plan this entry announces. */
+    planId: text("plan_id"),
     createdAt: createdAt(),
   },
   (t) => [index("agent_messages_campaign_idx").on(t.campaignId, t.createdAt)],
@@ -272,4 +290,28 @@ export const projectFonts = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("project_fonts_face_idx").on(t.projectId, sql`lower(${t.family})`, t.weight, t.style)],
+);
+
+/**
+ * A creative plan for a campaign. Each proposal is a new version; approving
+ * one turns its directions into creative directions in the workspace.
+ */
+export const creativePlans = pgTable(
+  "creative_plans",
+  {
+    id: text("id").primaryKey().$defaultFn(() => newId("creativePlan")),
+    campaignId: text("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    status: text("status").$type<PlanStatus>().notNull().default("proposed"),
+    plan: jsonb("plan").$type<CreativePlan>().notNull(),
+    estimate: jsonb("estimate").$type<PlanEstimate>().notNull(),
+    /** The brief version the plan was written against. */
+    briefVersion: integer("brief_version"),
+    feedback: text("feedback"),
+    decidedBy: text("decided_by").$type<"user" | "agent">(),
+    decisionNote: text("decision_note"),
+    decidedAt: ts("decided_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("creative_plans_campaign_version_idx").on(t.campaignId, t.version)],
 );

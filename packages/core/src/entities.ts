@@ -8,7 +8,7 @@ export const VARIATION_STATUSES = ["draft", "generating", "ready", "approved", "
 export const FORMAT_STATUSES = ["pending", "ready", "failed"] as const;
 export const JOB_STATUSES = ["queued", "running", "succeeded", "failed", "cancelled"] as const;
 export const MESSAGE_ROLES = ["user", "agent", "system"] as const;
-export const MESSAGE_KINDS = ["message", "activity"] as const;
+export const MESSAGE_KINDS = ["message", "activity", "question", "plan"] as const;
 export const ASSET_KINDS = ["preview", "html5", "mp4", "gif", "png", "jpeg"] as const;
 
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
@@ -78,7 +78,7 @@ export const UpdateVariationInput = z.object({
 export const PostMessageInput = z.object({
   text: z.string().trim().min(1).max(20_000),
   role: z.enum(["user", "agent"]).default("user"),
-  kind: z.enum(MESSAGE_KINDS).default("message"),
+  kind: z.enum(["message", "activity"]).default("message"),
 });
 
 export const CreateJobInput = z.object({

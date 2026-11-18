@@ -44,9 +44,13 @@ export function VariationGrid({ workspace, onChange }: { workspace: Workspace; o
   if (workspace.directions.length === 0) {
     return (
       <div className="mx-auto max-w-xl space-y-4 pt-10">
-        <EmptyState title="No creative directions yet">
-          Directions and their variations appear here as the agent produces them. You can also add a direction yourself.
-        </EmptyState>
+        {workspace.latestPlan?.status === "proposed" ? (
+          <EmptyState title="No creative directions yet">Approve the plan above to create its directions here, or request changes.</EmptyState>
+        ) : (
+          <EmptyState title="No creative directions yet">
+            Directions and their variations appear here as the agent produces them. You can also add a direction yourself.
+          </EmptyState>
+        )}
         <CreateForm label="Direction name" placeholder="Name a creative direction" submitLabel="Add direction" onCreate={addDirection} />
       </div>
     );
@@ -129,7 +133,9 @@ function DirectionSection({
             </h2>
             <StatusBadge status={direction.status} />
             <span className="text-xs text-zinc-500">
-              {direction.variations.length} variation{direction.variations.length === 1 ? "" : "s"}
+              {direction.plannedVariations
+                ? `${direction.variations.length} of ${direction.plannedVariations} planned variations`
+                : `${direction.variations.length} variation${direction.variations.length === 1 ? "" : "s"}`}
             </span>
           </div>
           {summary && <p className="mt-1 line-clamp-2 text-xs text-zinc-600">{summary}</p>}
