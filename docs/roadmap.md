@@ -4,7 +4,7 @@
 |---|---|---|
 | 1 | Architecture and technical foundation | Done |
 | 2 | Main interface and workspace | Done, except side-by-side comparison and export status (they need rendering and exports) |
-| 3 | Creative document model and design ingestion | Built and tested against sample designs and a stand-in for the Figma API. Not yet run against a real Figma file. |
+| 3 | Creative document model and design ingestion | Done. Verified on a real 970×250 client frame; brand fonts not on Google Fonts render in a substitute font until font upload exists. |
 | 4 | Agent orchestration and creative planning | Not started |
 | 5 | Variation generation engine | Not started |
 | 6 | Creative editing and manipulation | Not started |

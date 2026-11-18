@@ -98,8 +98,15 @@ The Figma importer uses three documented REST endpoints (file nodes, image
 fills, image renders) with a personal access token in `FIGMA_TOKEN`. Text,
 images, rectangles, ellipses and containers become live layers. Vectors,
 rotated nodes, masks, shapes with effects and unsupported fills are rendered
-by Figma and placed as flat image layers; the import report lists each one and
-why. Figma's own render of the frame is stored as a reference so our render
+by Figma and placed as flat image layers; a group made only of vector paths (a
+logo) becomes one image. The import report lists each one and why. Image crops,
+paragraph spacing, underline and per-character styles (styled text ranges) are
+carried over. Each font is checked against Google Fonts and the report warns
+when one is unavailable.
+
+Image downloads come from hosts other than `api.figma.com`
+(`s3-alpha-sig.figma.com`, `figma-alpha-api.s3.us-west-2.amazonaws.com`,
+`blobs.figma.com`); a restricted network must allow all of them. Figma's own render of the frame is stored as a reference so our render
 can be compared with it in the design viewer. Semantic roles are inferred from
 layer names. The Figma file is never modified.
 
@@ -186,6 +193,7 @@ variables to enable Figma import.
 
 - No user accounts; a single optional shared API key.
 - No S3 driver.
-- Figma import has not yet been run against a real Figma file.
+- Brand fonts that Google Fonts does not host render in a substitute font; font upload is not built.
+- A text layer's styled ranges are dropped when its text is replaced.
 - Asset URLs are not access-controlled beyond their unguessable ids.
 - No side-by-side comparison or export status in the grid yet.
