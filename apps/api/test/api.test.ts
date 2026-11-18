@@ -298,6 +298,18 @@ describe("designs", () => {
     expect(Object.keys(ws.designs)).toEqual([design.id]);
     expect(ws.designs[design.id].document.width).toBe(728);
 
+    const usage = (await call("GET", `/v1/designs/${design.id}/usage`)).body.data;
+    expect(usage).toEqual([{ variationId: variation.id, variationName: "V", status: "draft", directionId: direction.id, directionName: "D", campaignId: campaign.id, campaignName: "C" }]);
+    const listed = (await call("GET", `/v1/projects/${project.id}/designs`)).body.data;
+    expect(listed.map((d: { usageCount: number }) => d.usageCount)).toEqual([1]);
+
+    // A design from another project cannot be used in this campaign.
+    const other = await newProject();
+    const foreign = (await call("POST", `/v1/projects/${other.id}/designs/from-fixture`, { fixture: "coffee-728x90" })).body.data;
+    const cross = await call("POST", `/v1/directions/${direction.id}/variations`, { name: "X", sourceDesignId: foreign.id });
+    expect(cross.status).toBe(400);
+    expect(cross.body.error.message).toContain("different project");
+
     const blocked = await call("DELETE", `/v1/designs/${design.id}`);
     expect(blocked.status).toBe(409);
     expect(blocked.body.error.message).toContain("1 variation");

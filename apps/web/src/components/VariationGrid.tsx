@@ -3,18 +3,11 @@
 import { applyOverrides } from "@adengine/design";
 import { useMemo, useState } from "react";
 import { type Design, type Direction, type Variation, type Workspace, api, useResource } from "../lib/api";
+import { PRESET_SIZES } from "../lib/sizes";
 import { DesignPreview } from "./DesignPreview";
 import { CreateForm } from "./CreateForm";
 import { Button, EmptyState, ErrorNote, StatusBadge, inputClass } from "./ui";
 
-/** Sizes offered when a variation is added by hand. Purely a UI convenience. */
-const PRESET_SIZES = [
-  { width: 300, height: 250 },
-  { width: 728, height: 90 },
-  { width: 160, height: 600 },
-  { width: 320, height: 50 },
-  { width: 300, height: 600 },
-];
 
 const FILTERS = [
   { id: "all", label: "All", match: (_: Variation) => true },

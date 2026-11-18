@@ -53,7 +53,7 @@ export function Button({
     <button
       type="button"
       {...props}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed ${sizing} ${BUTTONS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed ${sizing} ${BUTTONS[variant]} ${className}`}
     />
   );
 }

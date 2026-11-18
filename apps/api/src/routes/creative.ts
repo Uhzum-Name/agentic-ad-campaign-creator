@@ -98,8 +98,12 @@ export function creativeRoutes(app: FastifyInstance, { db }: AppDeps): void {
     const { sizes, ...input } = parse(CreateVariationInput, req.body);
     const direction = await requireDirection(db, req.params.id);
     if (input.sourceDesignId) {
-      const [design] = await db.select({ id: designDocuments.id }).from(designDocuments).where(eq(designDocuments.id, input.sourceDesignId));
+      const [design] = await db.select({ projectId: designDocuments.projectId }).from(designDocuments).where(eq(designDocuments.id, input.sourceDesignId));
       if (!design) throw AppError.notFound("Design document", input.sourceDesignId);
+      const campaign = await requireCampaign(db, direction.campaignId);
+      if (design.projectId !== campaign.projectId) {
+        throw new AppError("validation_error", "The source design belongs to a different project than this campaign");
+      }
     }
     const unique = new Set(sizes?.map((s) => `${s.width}x${s.height}`));
     if (sizes && unique.size !== sizes.length) throw new AppError("validation_error", "sizes contains the same dimensions more than once");

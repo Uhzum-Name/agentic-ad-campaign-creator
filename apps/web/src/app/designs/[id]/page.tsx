@@ -6,8 +6,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DesignPreview } from "../../../components/DesignPreview";
-import { EmptyState, ErrorNote, Skeleton, TopBar } from "../../../components/ui";
-import { type Design, type Project, assetUrl, useResource } from "../../../lib/api";
+import { UseInCampaign } from "../../../components/UseInCampaign";
+import { Button, EmptyState, ErrorNote, Skeleton, StatusBadge, TopBar } from "../../../components/ui";
+import { type Design, type DesignUsage, type Project, assetUrl, useResource } from "../../../lib/api";
 
 type View = "ours" | "reference" | "both";
 
@@ -17,6 +18,8 @@ export default function DesignPage() {
   const project = useResource<Project>(design.data ? `/projects/${design.data.projectId}` : null);
   const [selected, setSelected] = useState<string>();
   const [view, setView] = useState<View>("ours");
+  const [using, setUsing] = useState(false);
+  const usage = useResource<DesignUsage[]>(`/designs/${id}/usage`);
 
   const layers = useMemo(() => (design.data ? listLayers(design.data.document) : []), [design.data]);
   const selectedInfo = layers.find((l) => l.id === selected);
@@ -48,6 +51,11 @@ export default function DesignPage() {
           { label: d?.name ?? "…" },
         ]}
       >
+        {d && (
+          <Button variant="primary" onClick={() => setUsing((v) => !v)} aria-expanded={using}>
+            Use in campaign
+          </Button>
+        )}
         {d?.referenceAssetKey && (
           <div role="group" aria-label="Compare with Figma" className="flex rounded-md border border-zinc-300 bg-white p-0.5">
             {(
@@ -99,6 +107,30 @@ export default function DesignPage() {
           </main>
 
           <aside aria-label="Layers" className="flex w-[340px] shrink-0 flex-col border-l border-zinc-200 bg-white">
+            {using && (
+              <section aria-label="Use in campaign" className="border-b border-zinc-200 bg-indigo-50/60 px-4 py-4">
+                <h2 className="mb-3 text-sm font-semibold">Use in campaign</h2>
+                <UseInCampaign design={d} onDone={usage.refresh} onCancel={() => setUsing(false)} />
+              </section>
+            )}
+            <div className="border-b border-zinc-200 px-4 py-3 text-xs text-zinc-600">
+              <p>
+                This is an original design. It is never changed: variations are built on top of it, and every edit is made to a variation.
+              </p>
+              <h2 className="mt-3 text-sm font-semibold text-zinc-900">Used in</h2>
+              {usage.data?.length === 0 && <p className="mt-1">No variations use this design yet.</p>}
+              {usage.error && <p className="mt-1 text-rose-700">{usage.error.message}</p>}
+              <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                {usage.data?.map((u) => (
+                  <li key={u.variationId} className="flex items-center gap-2">
+                    <Link href={`/campaigns/${u.campaignId}`} title={`${u.campaignName} › ${u.directionName} › ${u.variationName}`} className="min-w-0 flex-1 truncate text-zinc-800 hover:text-accent">
+                      {u.campaignName} › {u.directionName} › {u.variationName}
+                    </Link>
+                    <StatusBadge status={u.status} />
+                  </li>
+                ))}
+              </ul>
+            </div>
             <div className="border-b border-zinc-200 px-4 py-3">
               <h2 className="text-sm font-semibold">Layers</h2>
               <p className="text-xs text-zinc-500">

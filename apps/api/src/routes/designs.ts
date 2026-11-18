@@ -1,9 +1,9 @@
 import { AppError, SEMANTIC_ROLES } from "@adengine/core";
-import { designDocuments, variations } from "@adengine/db";
+import { campaigns, creativeDirections, designDocuments, variations } from "@adengine/db";
 import { findLayers, getLayer, listLayers, summarizeDesign } from "@adengine/design";
 import { createDesign, getDesign, importFixture, listDesigns, listFixtures } from "@adengine/engine";
 import { parseFigmaUrl } from "@adengine/figma";
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { type AppDeps, parse } from "../app.ts";
@@ -29,7 +29,17 @@ export function designRoutes(app: FastifyInstance, { db, storage, jobs }: AppDep
 
   app.get("/design-fixtures", async () => ({ data: listFixtures() }));
 
-  app.get<{ Params: { id: string } }>("/projects/:id/designs", async (req) => ({ data: await listDesigns(db, req.params.id) }));
+  app.get<{ Params: { id: string } }>("/projects/:id/designs", async (req) => {
+    const designs = await listDesigns(db, req.params.id);
+    const counts = await db
+      .select({ id: variations.sourceDesignId, n: sql<number>`count(*)::int` })
+      .from(variations)
+      .innerJoin(designDocuments, eq(designDocuments.id, variations.sourceDesignId))
+      .where(eq(designDocuments.projectId, req.params.id))
+      .groupBy(variations.sourceDesignId);
+    const byId = new Map(counts.map((c) => [c.id, c.n]));
+    return { data: designs.map((d) => ({ ...d, usageCount: byId.get(d.id) ?? 0 })) };
+  });
 
   app.post<{ Params: { id: string } }>("/projects/:id/designs", async (req, reply) => {
     const body = parse(CreateDesignBody, req.body);
@@ -62,6 +72,27 @@ export function designRoutes(app: FastifyInstance, { db, storage, jobs }: AppDep
   app.get<{ Params: { id: string } }>("/designs/:id", async (req) => {
     const design = await getDesign(db, req.params.id);
     return { data: { ...design, summary: summarizeDesign(design.document) } };
+  });
+
+  /** The variations built from this design, with their campaign and direction. */
+  app.get<{ Params: { id: string } }>("/designs/:id/usage", async (req) => {
+    await getDesign(db, req.params.id);
+    const rows = await db
+      .select({
+        variationId: variations.id,
+        variationName: variations.name,
+        status: variations.status,
+        directionId: creativeDirections.id,
+        directionName: creativeDirections.name,
+        campaignId: campaigns.id,
+        campaignName: campaigns.name,
+      })
+      .from(variations)
+      .innerJoin(creativeDirections, eq(creativeDirections.id, variations.directionId))
+      .innerJoin(campaigns, eq(campaigns.id, variations.campaignId))
+      .where(eq(variations.sourceDesignId, req.params.id))
+      .orderBy(asc(campaigns.name), asc(creativeDirections.position), asc(variations.position));
+    return { data: rows };
   });
 
   app.get<{ Params: { id: string } }>("/designs/:id/layers", async (req) => {

@@ -60,7 +60,7 @@ export function DesignLibrary({ projectId }: { projectId: string }) {
         <h2 id="designs-title" className="text-lg font-semibold">
           Designs
         </h2>
-        <p className="mt-1 text-sm text-zinc-600">Source designs for this project. Variations are built from these without changing the originals.</p>
+        <p className="mt-1 text-sm text-zinc-600">The original artwork for this project. Open a design to use it in a campaign; variations are built from it without changing the original.</p>
       </div>
 
       <form onSubmit={importFigma} className="space-y-2">
@@ -107,6 +107,9 @@ export function DesignLibrary({ projectId }: { projectId: string }) {
                 <span className="block truncate text-sm font-medium">{d.name}</span>
                 <span className="text-xs text-zinc-500">
                   {d.width}×{d.height} · {d.source.kind === "figma" ? "Figma" : d.source.kind === "fixture" ? "Sample" : "Added directly"}
+                </span>
+                <span className="block text-xs text-zinc-500">
+                  {d.usageCount ? `Used in ${d.usageCount} variation${d.usageCount === 1 ? "" : "s"}` : "Not used yet"}
                 </span>
               </div>
             </Link>

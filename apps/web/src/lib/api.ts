@@ -66,6 +66,17 @@ export interface Design {
     warnings?: string[];
   } | null;
   createdAt: string;
+  /** Present in project design lists. */
+  usageCount?: number;
+}
+export interface DesignUsage {
+  variationId: string;
+  variationName: string;
+  status: Variation["status"];
+  directionId: string;
+  directionName: string;
+  campaignId: string;
+  campaignName: string;
 }
 export interface Job {
   id: string;
