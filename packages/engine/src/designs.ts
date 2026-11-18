@@ -1,5 +1,5 @@
 import { AppError, DesignDocument, type DesignSource, type Layer, newId } from "@adengine/core";
-import { type Db, designDocuments, projects } from "@adengine/db";
+import { type Db, designDocuments, projectFonts, projects } from "@adengine/db";
 import { fontStylesheetUrls, fontsUsed, summarizeDesign } from "@adengine/design";
 import { FigmaClient, type FetchLike, convertFigmaFrame } from "@adengine/figma";
 import type { Storage } from "@adengine/storage";
@@ -174,7 +174,9 @@ export async function importFigmaDesign(
     });
 
   await onProgress(0.92, "Checking fonts");
-  report.warnings.push(...(await checkWebFonts(document, figma.fetch)));
+  const uploaded = await db.select({ family: projectFonts.family }).from(projectFonts).where(eq(projectFonts.projectId, input.projectId));
+  const fontCheck = await checkWebFonts(document, uploaded.map((f) => f.family), figma.fetch);
+  report.warnings.push(...fontCheck.warnings);
 
   await onProgress(0.95, "Saving the design");
   return insertDesign(db, {
@@ -184,31 +186,34 @@ export async function importFigmaDesign(
     source: { kind: "figma", fileKey: input.fileKey, nodeId: input.nodeId },
     document: validateDocument({ ...document, layers: prune(document.layers) }),
     ...(referenceAssetKey ? { referenceAssetKey } : {}),
-    importReport: report as unknown as Record<string, unknown>,
+    importReport: { ...report, webFontsUnavailable: fontCheck.unavailable } as unknown as Record<string, unknown>,
   });
 }
 
 /**
- * Fonts are loaded from Google Fonts by family name. A family it does not host
- * (typically a licensed brand font) falls back to a system font, so text may
- * look and wrap differently from the original. This says so up front.
+ * Fonts are loaded from Google Fonts by family name unless uploaded to the
+ * project. A family Google does not host (typically a licensed brand font)
+ * falls back to a system font until its files are uploaded. The result is
+ * stored with the import; the app compares it with the project's uploads to
+ * show each font's current status.
  */
-async function checkWebFonts(doc: DesignDocument, fetchImpl?: FetchLike): Promise<string[]> {
+async function checkWebFonts(doc: DesignDocument, uploadedFamilies: string[], fetchImpl?: FetchLike): Promise<{ unavailable: string[]; warnings: string[] }> {
   const doFetch = fetchImpl ?? ((url: string) => fetch(url));
-  const families = fontsUsed(doc).map((f) => f.family);
-  const urls = fontStylesheetUrls(doc);
+  const uploaded = new Set(uploadedFamilies.map((f) => f.toLowerCase()));
+  const unavailable: string[] = [];
   const warnings: string[] = [];
   await Promise.all(
-    families.map(async (family, i) => {
-      try {
-        const res = await doFetch(urls[i]!);
-        if (res.status === 400 || res.status === 404) {
-          warnings.push(`The font "${family}" is not available as a web font, so its text is shown in a substitute font and may wrap differently from Figma. Upload the font files to fix this.`);
+    fontsUsed(doc)
+      .filter((f) => !uploaded.has(f.family.toLowerCase()))
+      .map(async (f) => {
+        const [url] = fontStylesheetUrls({ ...doc, layers: [{ id: "f", type: "text", name: "f", x: 0, y: 0, width: 1, height: 1, rotation: 0, opacity: 1, visible: true, text: "", style: { fontFamily: f.family, fontWeight: f.weights[0] ?? 400, fontSize: 10, letterSpacing: 0, color: "#000", align: "left", verticalAlign: "top", italic: false, transform: "none", underline: false, paragraphSpacing: 0 } }] });
+        try {
+          const res = await doFetch(url!);
+          if (res.status === 400 || res.status === 404) unavailable.push(f.family);
+        } catch {
+          warnings.push(`Could not check whether the font "${f.family}" is available as a web font.`);
         }
-      } catch {
-        warnings.push(`Could not check whether the font "${family}" is available as a web font.`);
-      }
-    }),
+      }),
   );
-  return warnings.sort();
+  return { unavailable: unavailable.sort(), warnings };
 }

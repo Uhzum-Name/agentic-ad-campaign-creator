@@ -10,6 +10,30 @@ import type { DesignDocument, Fill, Layer, TextLayer } from "@adengine/core/desi
 export interface RenderOptions {
   /** Maps an asset storage key to a URL the page can load. */
   assetUrl: (assetKey: string) => string;
+  /** Uploaded font files. Families listed here are not requested from Google Fonts. */
+  fonts?: FontFace[];
+}
+
+/** One uploaded font file. */
+export interface FontFace {
+  family: string;
+  weight: number;
+  style: "normal" | "italic";
+  format: "truetype" | "opentype" | "woff" | "woff2";
+  assetKey: string;
+}
+
+const sameFamily = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** @font-face rules for uploaded fonts. */
+export function fontFaceCss(faces: FontFace[], assetUrl: (key: string) => string): string {
+  return faces
+    .map((f) => {
+      const family = f.family.replace(/['"\\;{}<>]/g, "");
+      const url = assetUrl(f.assetKey).replace(/[\\'"()\s<>]/g, (c) => encodeURIComponent(c));
+      return `@font-face{font-family:'${family}';src:url('${url}') format('${f.format}');font-weight:${Math.round(f.weight)};font-style:${f.style === "italic" ? "italic" : "normal"};font-display:block}`;
+    })
+    .join("\n");
 }
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -202,8 +226,10 @@ export function fontsUsed(doc: DesignDocument): { family: string; weights: numbe
  * Fonts does not host simply fails to load and the fallback stack is used;
  * supplying licensed brand fonts is a later capability.
  */
-export function fontStylesheetUrls(doc: DesignDocument): string[] {
-  return fontsUsed(doc).map(({ family, weights, italic }) => {
+export function fontStylesheetUrls(doc: DesignDocument, uploaded: FontFace[] = []): string[] {
+  return fontsUsed(doc)
+    .filter(({ family }) => !uploaded.some((f) => sameFamily(f.family, family)))
+    .map(({ family, weights, italic }) => {
     const name = encodeURIComponent(family).replace(/%20/g, "+");
     const axis = italic
       ? `ital,wght@${[0, 1].flatMap((i) => weights.map((w) => `${i},${w}`)).join(";")}`
@@ -214,6 +240,7 @@ export function fontStylesheetUrls(doc: DesignDocument): string[] {
 
 /** A complete standalone HTML page for the document (used for capture and export). */
 export function renderPage(doc: DesignDocument, opts: RenderOptions): string {
-  const links = fontStylesheetUrls(doc).map((u) => `<link rel="stylesheet" href="${esc(u)}">`).join("");
-  return `<!doctype html><html><head><meta charset="utf-8">${links}<style>html,body{margin:0;padding:0}</style></head><body>${renderDocument(doc, opts)}</body></html>`;
+  const links = fontStylesheetUrls(doc, opts.fonts).map((u) => `<link rel="stylesheet" href="${esc(u)}">`).join("");
+  const faces = fontFaceCss(opts.fonts ?? [], opts.assetUrl).replace(/</g, "\\3c ");
+  return `<!doctype html><html><head><meta charset="utf-8">${links}<style>${faces}html,body{margin:0;padding:0}</style></head><body>${renderDocument(doc, opts)}</body></html>`;
 }

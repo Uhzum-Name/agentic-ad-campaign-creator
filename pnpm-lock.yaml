@@ -190,6 +190,9 @@ importers:
       '@adengine/figma':
         specifier: workspace:*
         version: link:../figma
+      '@adengine/fonts':
+        specifier: workspace:*
+        version: link:../fonts
       '@adengine/jobs':
         specifier: workspace:*
         version: link:../jobs
@@ -204,6 +207,12 @@ importers:
         version: 4.6.7
 
   packages/figma:
+    dependencies:
+      '@adengine/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/fonts:
     dependencies:
       '@adengine/core':
         specifier: workspace:*

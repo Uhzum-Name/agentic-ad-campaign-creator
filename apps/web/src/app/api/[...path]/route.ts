@@ -21,17 +21,17 @@ async function forward(req: Request, path: string[]): Promise<Response> {
   // Loaded on demand so a module that fails to load is reported, not a bare 500.
   const { getEngine } = await import("../../../server/engine");
   const app = await getEngine();
-  const body = req.method === "GET" || req.method === "DELETE" ? "" : await req.text();
+  const body = req.method === "GET" || req.method === "DELETE" ? null : Buffer.from(await req.arrayBuffer());
   const headers: Record<string, string> = {};
   const auth = req.headers.get("authorization");
   if (auth) headers.authorization = auth;
-  if (body) headers["content-type"] = req.headers.get("content-type") ?? "application/json";
+  if (body?.length) headers["content-type"] = req.headers.get("content-type") ?? "application/json";
 
   const res = await app.inject({
     method: req.method as Method,
     url: `/v1/${path.map(encodeURIComponent).join("/")}${new URL(req.url).search}`,
     headers,
-    ...(body ? { payload: body } : {}),
+    ...(body?.length ? { payload: body } : {}),
   });
   // rawPayload keeps binary responses (stored images) intact.
   return new Response(res.statusCode === 204 ? null : new Uint8Array(res.rawPayload), {

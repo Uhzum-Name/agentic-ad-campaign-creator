@@ -50,6 +50,7 @@ pnpm test             # integration tests run against TEST_DATABASE_URL
 | `packages/db` | PostgreSQL schema (Drizzle) and migrations |
 | `packages/storage` | Asset storage interface; PostgreSQL (default) and local-disk drivers |
 | `packages/design` | Layer inspection, override application and the HTML renderer (browser-safe) |
+| `packages/fonts` | Reads family, weight and style from font files (TTF, OTF, WOFF, WOFF2) |
 | `packages/figma` | Figma REST client and Figma-to-design converter |
 | `packages/engine` | Sample designs, design ingestion, and the engine's job types |
 | `packages/jobs` | Durable background jobs (pg-boss dispatch, `jobs` table as source of truth) |

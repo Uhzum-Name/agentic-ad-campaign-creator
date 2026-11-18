@@ -110,6 +110,19 @@ Image downloads come from hosts other than `api.figma.com`
 can be compared with it in the design viewer. Semantic roles are inferred from
 layer names. The Figma file is never modified.
 
+### Brand fonts (`packages/fonts`, `packages/engine/src/fonts.ts`)
+
+Font files (.woff2, .woff, .otf, .ttf, up to 4 MB) are uploaded per project:
+`POST /v1/projects/:id/fonts` with the file as the raw request body. The
+family, weight and style are read from the file's `name` and `OS/2` tables
+(`parseFont`), so nothing has to be typed in; `?family=` overrides the family.
+Uploading the same family, weight and style again replaces it. Designs refer to
+fonts by family name, matched case-insensitively. Uploaded families are
+declared with `@font-face` and never requested from Google Fonts; other
+families still are. A Figma import records which of its fonts Google Fonts
+does not host (`importReport.webFontsUnavailable`), and the design viewer shows
+each font as Uploaded, Web font, Missing or Not uploaded.
+
 ## API conventions
 
 - JSON in and out, under `/v1`.
@@ -193,7 +206,7 @@ variables to enable Figma import.
 
 - No user accounts; a single optional shared API key.
 - No S3 driver.
-- Brand fonts that Google Fonts does not host render in a substitute font; font upload is not built.
+- Fonts are matched to designs by family name only; a font file whose internal name differs from the name in Figma must be uploaded with a family override (API `?family=`), which the UI does not offer yet.
 - A text layer's styled ranges are dropped when its text is replaced.
 - Asset URLs are not access-controlled beyond their unguessable ids.
 - No side-by-side comparison or export status in the grid yet.

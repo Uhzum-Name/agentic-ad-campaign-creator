@@ -10,6 +10,7 @@
     "@adengine/db": "workspace:*",
     "@adengine/design": "workspace:*",
     "@adengine/figma": "workspace:*",
+    "@adengine/fonts": "workspace:*",
     "@adengine/jobs": "workspace:*",
     "@adengine/storage": "workspace:*",
     "drizzle-orm": "^0.45.0",

@@ -1,7 +1,7 @@
 import { AppError, SEMANTIC_ROLES } from "@adengine/core";
 import { campaigns, creativeDirections, designDocuments, variations } from "@adengine/db";
 import { findLayers, getLayer, listLayers, summarizeDesign } from "@adengine/design";
-import { createDesign, getDesign, importFixture, listDesigns, listFixtures } from "@adengine/engine";
+import { MAX_FONT_BYTES, createDesign, deleteFont, getDesign, importFixture, listDesigns, listFixtures, listFonts, uploadFont } from "@adengine/engine";
 import { parseFigmaUrl } from "@adengine/figma";
 import { asc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -117,6 +117,27 @@ export function designRoutes(app: FastifyInstance, { db, storage, jobs }: AppDep
       throw new AppError("conflict", `This design is the source of ${used.n} variation${used.n === 1 ? "" : "s"} and cannot be deleted.`);
     }
     await db.delete(designDocuments).where(eq(designDocuments.id, req.params.id));
+    return reply.status(204).send();
+  });
+
+  // ----- brand fonts -----
+  app.get<{ Params: { id: string } }>("/projects/:id/fonts", async (req) => ({ data: await listFonts(db, req.params.id) }));
+
+  // The request body is the font file itself (not JSON). Family, weight and style are read from the file.
+  app.post<{ Params: { id: string }; Querystring: { fileName?: string; family?: string } }>(
+    "/projects/:id/fonts",
+    { bodyLimit: MAX_FONT_BYTES + 1024 },
+    async (req, reply) => {
+      if (!Buffer.isBuffer(req.body)) {
+        throw new AppError("validation_error", "Send the font file as the request body with Content-Type application/octet-stream (or font/woff2, font/ttf, ...).");
+      }
+      const result = await uploadFont(deps, { projectId: req.params.id, data: req.body, fileName: req.query.fileName, family: req.query.family });
+      return reply.status(result.replaced ? 200 : 201).send({ data: { ...result.font, replaced: result.replaced } });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>("/fonts/:id", async (req, reply) => {
+    await deleteFont(deps, req.params.id);
     return reply.status(204).send();
   });
 

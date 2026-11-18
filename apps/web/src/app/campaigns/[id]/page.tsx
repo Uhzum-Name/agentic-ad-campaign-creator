@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { AgentPanel } from "../../../components/AgentPanel";
+import { ProjectFontsProvider } from "../../../components/ProjectFonts";
 import { VariationGrid } from "../../../components/VariationGrid";
 import { EmptyState, ErrorNote, Skeleton, TopBar, statusLabel } from "../../../components/ui";
 import { type Project, type Workspace, api, useResource } from "../../../lib/api";
@@ -88,7 +89,11 @@ export default function CampaignWorkspacePage() {
               <Skeleton className="h-64" />
             </div>
           )}
-          {workspace.data && <VariationGrid workspace={workspace.data} onChange={workspace.refresh} />}
+          {workspace.data && (
+            <ProjectFontsProvider projectId={campaign?.projectId}>
+              <VariationGrid workspace={workspace.data} onChange={workspace.refresh} />
+            </ProjectFontsProvider>
+          )}
         </main>
       </div>
     </div>

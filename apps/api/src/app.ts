@@ -61,6 +61,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.status(404).send({ error: { code: "not_found", message: `No route for ${req.method} ${req.url}` } }),
   );
 
+  // Binary uploads (font files). Each route sets its own size limit.
+  app.addContentTypeParser(["application/octet-stream", "font/ttf", "font/otf", "font/woff", "font/woff2", "font/sfnt"], { parseAs: "buffer" }, (_req, body, done) => done(null, body));
+
   app.get("/health", async () => ({ status: "ok" }));
 
   app.register(

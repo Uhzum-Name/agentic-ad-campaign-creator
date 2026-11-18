@@ -18,6 +18,7 @@ export const ID_PREFIX = {
   job: "job",
   recipe: "rcp",
   agentMessage: "msg",
+  font: "fnt",
 } as const;
 
 export type EntityKind = keyof typeof ID_PREFIX;

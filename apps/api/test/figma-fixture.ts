@@ -26,7 +26,7 @@ export const FIGMA_FRAME: FigmaNode = {
     {
       id: "1:5", name: "Body copy", type: "TEXT", absoluteBoundingBox: box(20, 96, 180, 30), characters: "Built for the long way round.", fills: [solid(0.8, 0.85, 0.9, 0.9)],
       characterStyleOverrides: [0, 0, 1, 1, 0, 2], styleOverrideTable: { "1": { fontWeight: 700, fills: [solid(1, 0, 0)], textDecoration: "UNDERLINE" } },
-      style: { fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeightPx: 16.8, paragraphSpacing: 6, textAlignHorizontal: "CENTER", textCase: "UPPER", italic: true },
+      style: { fontFamily: "Probe Sans", fontWeight: 400, fontSize: 12, lineHeightPx: 16.8, paragraphSpacing: 6, textAlignHorizontal: "CENTER", textCase: "UPPER", italic: true },
     },
     {
       id: "1:6", name: "CTA Button", type: "FRAME", absoluteBoundingBox: box(20, 190, 120, 40), clipsContent: false, fills: [],

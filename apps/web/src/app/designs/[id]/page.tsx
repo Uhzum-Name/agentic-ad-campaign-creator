@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DesignPreview } from "../../../components/DesignPreview";
+import { ProjectFontsProvider, useProjectFonts } from "../../../components/ProjectFonts";
 import { UseInCampaign } from "../../../components/UseInCampaign";
 import { Button, EmptyState, ErrorNote, Skeleton, StatusBadge, TopBar } from "../../../components/ui";
 import { type Design, type DesignUsage, type Project, assetUrl, useResource } from "../../../lib/api";
@@ -15,6 +16,15 @@ type View = "ours" | "reference" | "both";
 export default function DesignPage() {
   const { id } = useParams<{ id: string }>();
   const design = useResource<Design & { summary: DesignSummary }>(`/designs/${id}`);
+  return (
+    <ProjectFontsProvider projectId={design.data?.projectId}>
+      <DesignView design={design} />
+    </ProjectFontsProvider>
+  );
+}
+
+function DesignView({ design }: { design: ReturnType<typeof useResource<Design & { summary: DesignSummary }>> }) {
+  const { id } = useParams<{ id: string }>();
   const project = useResource<Project>(design.data ? `/projects/${design.data.projectId}` : null);
   const [selected, setSelected] = useState<string>();
   const [view, setView] = useState<View>("ours");
@@ -131,6 +141,7 @@ export default function DesignPage() {
                 ))}
               </ul>
             </div>
+            <FontStatus design={d} />
             <div className="border-b border-zinc-200 px-4 py-3">
               <h2 className="text-sm font-semibold">Layers</h2>
               <p className="text-xs text-zinc-500">
@@ -211,6 +222,47 @@ function LayerDetails({ info, layer }: { info: LayerInfo; layer: Layer }) {
           <dd className="min-w-0 break-all font-mono text-[11px] text-zinc-700">{layer.id}</dd>
         </div>
       </dl>
+    </div>
+  );
+}
+
+/** Each font the design uses and where it comes from right now. */
+function FontStatus({ design }: { design: Design & { summary: DesignSummary } }) {
+  const { fonts } = useProjectFonts();
+  if (design.summary.fonts.length === 0) return null;
+  const uploaded = new Set((fonts ?? []).map((f) => f.family.toLowerCase()));
+  const checked = Array.isArray(design.importReport?.webFontsUnavailable);
+  const unavailable = new Set((design.importReport?.webFontsUnavailable ?? []).map((f) => f.toLowerCase()));
+  return (
+    <div className="border-b border-zinc-200 px-4 py-3 text-xs">
+      <h2 className="text-sm font-semibold text-zinc-900">Fonts</h2>
+      <ul className="mt-1 space-y-1">
+        {design.summary.fonts.map((family) => {
+          const key = family.toLowerCase();
+          // Only imports check Google Fonts; for other designs availability is unknown.
+          const state = uploaded.has(key) ? "uploaded" : unavailable.has(key) ? "missing" : checked ? "web" : "unchecked";
+          return (
+            <li key={family} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-zinc-800">{family}</span>
+              {state === "uploaded" && <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">Uploaded</span>}
+              {state === "web" && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">Web font</span>}
+              {state === "unchecked" && (
+                <span title="Loaded from Google Fonts if it is hosted there; otherwise shown in a substitute font." className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">
+                  Not uploaded
+                </span>
+              )}
+              {state === "missing" && (
+                <Link href={`/projects/${design.projectId}#fonts-title`} className="rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 hover:underline">
+                  Missing: upload it
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {[...unavailable].some((f) => !uploaded.has(f)) && (
+        <p className="mt-2 text-zinc-600">Text in a missing font is shown in a substitute and may wrap differently from the original.</p>
+      )}
     </div>
   );
 }

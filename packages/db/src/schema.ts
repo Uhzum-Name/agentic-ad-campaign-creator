@@ -251,3 +251,25 @@ export const storedObjects = pgTable("stored_objects", {
   contentType: text("content_type").notNull(),
   createdAt: createdAt(),
 });
+
+/**
+ * A brand font uploaded to a project: one row per face (family + weight +
+ * style). Designs refer to fonts by family name, so any design in the project
+ * that names this family is drawn with it.
+ */
+export const projectFonts = pgTable(
+  "project_fonts",
+  {
+    id: text("id").primaryKey().$defaultFn(() => newId("font")),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    family: text("family").notNull(),
+    weight: integer("weight").notNull(),
+    style: text("style").$type<"normal" | "italic">().notNull(),
+    format: text("format").$type<"truetype" | "opentype" | "woff" | "woff2">().notNull(),
+    assetKey: text("asset_key").notNull(),
+    bytes: integer("bytes").notNull(),
+    fileName: text("file_name"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("project_fonts_face_idx").on(t.projectId, sql`lower(${t.family})`, t.weight, t.style)],
+);

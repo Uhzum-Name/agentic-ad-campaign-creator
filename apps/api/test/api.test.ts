@@ -6,6 +6,8 @@ import { PostgresStorage, type Storage } from "@adengine/storage";
 import { figmaFetch } from "./figma-fixture.ts";
 import { sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 
@@ -331,8 +333,9 @@ describe("designs", () => {
     // The node Figma could not render was left out and reported.
     expect(design.document.layers.map((l: { name: string }) => l.name)).not.toContain("Broken star");
     expect(design.importReport.warnings.join(" ")).toContain("render of node 1:14");
-    // Inter is a web font, so no font warning is raised.
-    expect(design.importReport.warnings.join(" ")).not.toContain("font");
+    // Inter is a web font; "Probe Sans" is not, and nothing is uploaded yet.
+    expect(design.importReport.webFontsUnavailable).toEqual(["Probe Sans"]);
+    expect(design.summary.fonts).toEqual(["Inter", "Probe Sans"]);
     expect(design.summary.texts.map((t: { text: string }) => t.text)).toEqual(["Go further", "Built for the long way round.", "Shop now", "draft"]);
 
     const types: Record<string, string> = {};
@@ -372,5 +375,66 @@ describe("inline job mode", () => {
     expect(noToken).toMatchObject({ status: "failed", error: { code: "validation_error" } });
     expect(noToken.error!.message).toContain("FIGMA_TOKEN");
     await inline.stop();
+  });
+});
+
+describe("brand fonts", () => {
+  const font = (name: string) => readFileSync(join(import.meta.dirname, "../../../packages/fonts/test/fixtures", name));
+  const upload = (projectId: string, data: Buffer, query = "", type = "application/octet-stream") =>
+    app.inject({ method: "POST", url: `/v1/projects/${projectId}/fonts${query}`, payload: data, headers: { "content-type": type } });
+
+  it("reads uploaded font files, replaces a re-uploaded face, and serves them", async () => {
+    const project = (await call("POST", "/v1/projects", { name: "Fonts" })).body.data;
+    const files = ["ProbeSans-Regular.ttf", "ProbeSans-BoldItalic.otf", "ProbeSans-Semibold.woff", "ProbeSans-Light.woff2"];
+    for (const f of files) {
+      const res = await upload(project.id, font(f), `?fileName=${f}`, f.endsWith(".woff2") ? "font/woff2" : "application/octet-stream");
+      expect(res.statusCode).toBe(201);
+    }
+    const list = (await call("GET", `/v1/projects/${project.id}/fonts`)).body.data;
+    expect(list.map((f: { family: string; weight: number; style: string; format: string }) => `${f.family} ${f.weight} ${f.style} ${f.format}`)).toEqual([
+      "Probe Sans 300 normal woff2",
+      "Probe Sans 400 normal truetype",
+      "Probe Sans 600 normal woff",
+      "Probe Sans 700 italic opentype",
+    ]);
+
+    // Uploading the same face again replaces it rather than adding a duplicate.
+    const again = await upload(project.id, font("ProbeSans-Regular.ttf"));
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data.replaced).toBe(true);
+    expect((await call("GET", `/v1/projects/${project.id}/fonts`)).body.data).toHaveLength(4);
+
+    const served = await app.inject({ method: "GET", url: `/v1/assets/${again.json().data.assetKey}` });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers["content-type"]).toBe("font/ttf");
+    expect(served.rawPayload.equals(font("ProbeSans-Regular.ttf"))).toBe(true);
+
+    // The family name can be overridden to match the name used in designs.
+    const renamed = await upload(project.id, font("ProbeSans-Regular.ttf"), "?family=Connections");
+    expect(renamed.json().data).toMatchObject({ family: "Connections", weight: 400, style: "normal" });
+
+    const removed = await call("DELETE", `/v1/fonts/${renamed.json().data.id}`);
+    expect(removed.status).toBe(204);
+    expect((await app.inject({ method: "GET", url: `/v1/assets/${renamed.json().data.assetKey}` })).statusCode).toBe(404);
+    expect((await call("DELETE", `/v1/fonts/${renamed.json().data.id}`)).status).toBe(404);
+  });
+
+  it("rejects files that are not fonts and requests without a file", async () => {
+    const project = (await call("POST", "/v1/projects", { name: "Bad fonts" })).body.data;
+    const notFont = await upload(project.id, Buffer.from("definitely not a font file"));
+    expect(notFont.statusCode).toBe(400);
+    expect(notFont.json().error.message).toContain("not a font file");
+    expect((await call("POST", `/v1/projects/${project.id}/fonts`, { family: "x" })).status).toBe(400);
+    expect((await upload("prj_missing", font("ProbeSans-Regular.ttf"))).statusCode).toBe(404);
+    expect((await upload(project.id, Buffer.alloc(5 * 1024 * 1024))).statusCode).toBe(413);
+  });
+
+  it("treats an uploaded family as available when importing from Figma", async () => {
+    const project = (await call("POST", "/v1/projects", { name: "Fonts then Figma" })).body.data;
+    await upload(project.id, font("ProbeSans-Regular.ttf"));
+    const submitted = await call("POST", `/v1/projects/${project.id}/designs/import-figma`, { fileKey: "FILEKEY", nodeId: "1:2" });
+    const job = await waitForJob(submitted.body.data.id, (s) => s !== "queued" && s !== "running");
+    const design = (await call("GET", `/v1/designs/${job.output.designId}`)).body.data;
+    expect(design.importReport.webFontsUnavailable).toEqual([]);
   });
 });

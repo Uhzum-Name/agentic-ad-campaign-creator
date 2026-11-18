@@ -4,10 +4,12 @@ import type { DesignDocument } from "@adengine/core/design";
 import { fontStylesheetUrls, renderDocument } from "@adengine/design";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { assetUrl } from "../lib/api";
+import { useProjectFonts } from "./ProjectFonts";
 
 /** Adds each web-font stylesheet to the page once. */
 function useFonts(doc: DesignDocument) {
-  const urls = useMemo(() => fontStylesheetUrls(doc), [doc]);
+  const { faces } = useProjectFonts();
+  const urls = useMemo(() => fontStylesheetUrls(doc, faces), [doc, faces]);
   useEffect(() => {
     for (const url of urls) {
       if (document.head.querySelector(`link[data-ad-font="${CSS.escape(url)}"]`)) continue;

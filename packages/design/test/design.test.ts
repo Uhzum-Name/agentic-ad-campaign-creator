@@ -1,6 +1,6 @@
 import { DesignDocument } from "@adengine/core";
 import { describe, expect, it } from "vitest";
-import { applyOverrides, findLayers, fontStylesheetUrls, getLayer, listLayers, renderDocument, renderPage, summarizeDesign } from "../src/index.ts";
+import { applyOverrides, findLayers, fontFaceCss, fontStylesheetUrls, getLayer, listLayers, renderDocument, renderPage, summarizeDesign } from "../src/index.ts";
 
 const doc = DesignDocument.parse({
   schemaVersion: 1,
@@ -158,6 +158,16 @@ describe("rendering", () => {
     expect(out).not.toContain("<script>");
     expect(out).not.toContain("javascript:");
     expect(out).toContain("color:transparent");
+  });
+
+  it("declares uploaded fonts and does not request them from Google Fonts", () => {
+    const faces = [{ family: "Roboto Slab", weight: 400, style: "italic" as const, format: "woff2" as const, assetKey: "projects/p/fonts/a b.woff2" }];
+    expect(fontStylesheetUrls(doc, faces)).toEqual(["https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap"]);
+    expect(fontFaceCss(faces, (k) => `/api/assets/${k}`)).toBe("@font-face{font-family:'Roboto Slab';src:url('/api/assets/projects/p/fonts/a%20b.woff2') format('woff2');font-weight:400;font-style:italic;font-display:block}");
+    expect(fontFaceCss([{ ...faces[0]!, family: "x';}</style><script>" }], (k) => k)).not.toMatch(/<|'\}/);
+    const page = renderPage(doc, { assetUrl: (k) => k, fonts: faces });
+    expect(page).toContain("@font-face{font-family:'Roboto Slab'");
+    expect(page).not.toContain("Roboto+Slab");
   });
 
   it("lists web font stylesheets and builds a standalone page", () => {

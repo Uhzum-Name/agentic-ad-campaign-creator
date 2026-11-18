@@ -6,6 +6,7 @@ import { z } from "zod";
 import { importFigmaDesign } from "./designs.ts";
 
 export * from "./designs.ts";
+export * from "./fonts.ts";
 export { FIXTURES } from "./fixtures.ts";
 
 export interface EngineDeps {

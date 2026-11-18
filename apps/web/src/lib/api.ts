@@ -61,6 +61,7 @@ export interface Design {
   document: DesignDocument;
   referenceAssetKey: string | null;
   importReport: {
+    webFontsUnavailable?: string[];
     rasterized?: { nodeId: string; name: string; reason: string }[];
     skipped?: { nodeId: string; name: string; reason: string }[];
     warnings?: string[];
@@ -78,6 +79,39 @@ export interface DesignUsage {
   campaignId: string;
   campaignName: string;
 }
+export interface ProjectFont {
+  id: string;
+  projectId: string;
+  family: string;
+  weight: number;
+  style: "normal" | "italic";
+  format: "truetype" | "opentype" | "woff" | "woff2";
+  assetKey: string;
+  bytes: number;
+  fileName: string | null;
+  createdAt: string;
+}
+
+/** Uploads one font file as the raw request body; the server reads its family, weight and style. */
+export async function uploadFontFile(projectId: string, file: File): Promise<ProjectFont & { replaced: boolean }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/projects/${projectId}/fonts?fileName=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: file,
+    });
+  } catch {
+    throw new ApiError("Could not reach the server. Check that the API is running.", 0);
+  }
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = res.status === 413 ? "The file is too large (4 MB limit)." : (payload?.error?.message ?? `The upload failed (${res.status}).`);
+    throw new ApiError(message, res.status, payload?.error?.code);
+  }
+  return payload.data;
+}
+
 export interface Job {
   id: string;
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
