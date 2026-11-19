@@ -131,6 +131,12 @@ export const variations = pgTable(
     animationSpecId: text("animation_spec_id"),
     name: text("name").notNull(),
     overrides: jsonb("overrides").$type<Record<string, Record<string, unknown>>>().notNull().default({}),
+    /** The variation this one was built from, if any (it inherits that variation's overrides). */
+    parentVariationId: text("parent_variation_id"),
+    /** The changes as the agent described them, and what they touched. */
+    changes: jsonb("changes").$type<unknown[]>(),
+    dimensions: jsonb("dimensions").$type<string[]>(),
+    warnings: jsonb("warnings").$type<string[]>(),
     /** Which controlled dimensions were varied (headline, cta, image, ...) and why. */
     rationale: jsonb("rationale").$type<Record<string, unknown>>(),
     status: text("status").$type<VariationStatus>().notNull().default("draft"),
@@ -314,4 +320,21 @@ export const creativePlans = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("creative_plans_campaign_version_idx").on(t.campaignId, t.version)],
+);
+
+/** Images uploaded to a project, available to swap into variations. */
+export const projectImages = pgTable(
+  "project_images",
+  {
+    id: text("id").primaryKey().$defaultFn(() => newId("image")),
+    projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    assetKey: text("asset_key").notNull(),
+    contentType: text("content_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("project_images_project_idx").on(t.projectId)],
 );

@@ -205,3 +205,109 @@ describe("MCP server", () => {
     expect(await tool("analyze_brief", { campaignId: campaign.id, analysis: { summary: "x" } })).toMatchObject({ isError: true, error: { code: "conflict" } });
   });
 });
+
+describe("variations over MCP", () => {
+  const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  async function approvedDirection() {
+    const project = await tool("create_project", { name: "Variations" });
+    const design = await tool("add_sample_design", { projectId: project.id, fixture: "trail-shoe-300x250" });
+    const campaign = await tool("create_campaign", { projectId: project.id, name: "Ridge 2" });
+    const proposed = await tool("generate_creative_plan", {
+      campaignId: campaign.id,
+      plan: plan({ directions: [{ name: "Grip proof", concept: "Grip as proof", messagingAngle: "Wet rock is fine", sourceDesignId: design.id, variationCount: 4, varyElements: ["headline", "cta"] }] }),
+    });
+    const approved = await rest("POST", `/plans/${proposed.id}/approve`, {});
+    return { project, design, campaign, directionId: approved.body.data.directionIds[0] as string };
+  }
+
+  it("generates distinct, editable variations within the plan's dimensions", async () => {
+    const { campaign, directionId } = await approvedDirection();
+    const context = await tool("get_campaign_context", { campaignId: campaign.id });
+    const headline = context.designs[0].texts.find((t: { role?: string }) => t.role === "headline");
+    expect(headline.approxMaxChars).toBeGreaterThan(10);
+    expect(context.directions[0]).toMatchObject({ varyElements: ["headline", "cta"], sourceDesignId: context.designs[0].id });
+
+    const result = await tool("generate_variations", {
+      directionId,
+      variations: [
+        { name: "Wet rock", rationale: "Lead with the hardest surface", changes: [{ op: "set_text", target: { role: "headline" }, text: "Wet rock?\nNo problem." }] },
+        { rationale: "Urgency in the CTA", changes: [{ op: "set_text", target: { role: "headline" }, text: "Hold the line." }, { op: "set_text", target: { role: "cta" }, text: "Get grip" }, { op: "set_fill", target: { role: "cta" }, fill: { type: "solid", color: "#ffd23f" } }] },
+        { rationale: "Plain promise", changes: [{ op: "set_text", target: { role: "headline" }, text: "Grip that never quits on any trail, in any weather, all year round." }] },
+      ],
+    });
+    expect(result.variations.map((v: { name: string }) => v.name)).toEqual(["Wet rock", "Grip proof 2", "Grip proof 3"]);
+    expect(result.variations[1].dimensions.sort()).toEqual(["cta", "headline"]);
+    expect(result.variations[2].warnings[0]).toMatch(/may overflow/);
+    expect(result.sizes).toEqual([{ width: 300, height: 250 }, { width: 728, height: 90 }, { width: 970, height: 250 }]);
+
+    const ws = (await rest("GET", `/campaigns/${campaign.id}/workspace`)).body.data;
+    const cards = ws.directions[0].variations;
+    expect(cards.map((v: { status: string; formats: unknown[] }) => [v.status, v.formats.length])).toEqual([["ready", 3], ["ready", 3], ["ready", 3]]);
+    expect(cards[0].overrides).toEqual({ headline: { text: "Wet rock?\nNo problem." } });
+
+    const listed = await tool("list_variations", { campaignId: campaign.id });
+    expect(listed[0].texts.find((t: { role?: string }) => t.role === "headline").text).toBe("Wet rock?\nNo problem.");
+    expect(listed[1].changes.map((c: { field: string; after: string }) => `${c.field}=${c.after}`)).toEqual(["Text=Hold the line.", "Colour=#ffd23f", "Text=Get grip"]);
+    expect(listed[0].rationale).toEqual({ summary: "Lead with the hardest surface" });
+
+    const compared = await tool("compare_variations", { variationIds: [listed[0].id, listed[1].id] });
+    expect(compared.variations[1].differencesFromFirst.map((d: { field: string; before: string; after: string }) => `${d.field}: ${d.before} → ${d.after}`)).toEqual([
+      "Text: Wet rock?\nNo problem. → Hold the line.",
+      "Colour: #ff7a3d → #ffd23f",
+      "Text: Shop now → Get grip",
+    ]);
+
+    // Building on a parent keeps the parent's changes.
+    const child = await tool("generate_variations", { directionId, variations: [{ name: "Wet rock, new CTA", basedOnVariationId: listed[0].id, rationale: "Same headline, softer CTA", changes: [{ op: "set_text", target: { role: "cta" }, text: "See the sole" }] }] });
+    const [detail] = await tool("list_variations", { campaignId: campaign.id, directionId }).then((all: { id: string }[]) => all.filter((v) => v.id === child.variations[0].id));
+    expect(detail).toMatchObject({ parentVariationId: listed[0].id });
+    expect(detail.texts.map((t: { text: string }) => t.text)).toEqual(expect.arrayContaining(["Wet rock?\nNo problem.", "See the sole"]));
+  });
+
+  it("refuses a batch with any invalid variation, saving nothing, and explains each problem", async () => {
+    const { project, campaign, directionId } = await approvedDirection();
+    const bad = await tool("generate_variations", {
+      directionId,
+      variations: [
+        { rationale: "fine", changes: [{ op: "set_text", target: { role: "headline" }, text: "OK" }] },
+        { rationale: "image swap", changes: [{ op: "replace_image", target: { role: "product" }, assetKey: "designs/dsn_x/shoe.svg" }] },
+        { rationale: "no such role", changes: [{ op: "set_text", target: { role: "offer" }, text: "50% off" }] },
+      ],
+    });
+    expect(bad).toMatchObject({ isError: true, error: { code: "validation_error", message: "2 of 3 variations could not be built; nothing was saved. Fix them and send the batch again." } });
+    expect(bad.error.details[0]).toMatchObject({ variation: 2 });
+    expect(bad.error.details[0].errors.join(" ")).toMatch(/plan does not vary \(headline, cta\)/);
+    expect(bad.error.details[0].errors.join(" ")).toMatch(/Unknown image/);
+    expect(bad.error.details[1]).toMatchObject({ variation: 3 });
+    expect(await tool("list_variations", { campaignId: campaign.id })).toEqual([]);
+
+    // With a project image and a recorded reason, the out-of-plan change is accepted.
+    const image = await tool("upload_image", { projectId: project.id, name: "boot.png", base64: PNG });
+    expect(image).toMatchObject({ width: 1, height: 1, contentType: "image/png" });
+    const assets = await tool("list_project_assets", { projectId: project.id });
+    expect(assets.images.map((i: { assetKey: string }) => i.assetKey)).toEqual([image.assetKey]);
+    const ok = await tool("generate_variations", {
+      directionId,
+      variations: [{ rationale: "Show the boot", outOfPlanReason: "The person asked to try the boot image", changes: [{ op: "replace_image", target: { role: "product" }, assetKey: image.assetKey, fit: "contain" }] }],
+    });
+    expect(ok.variations[0].dimensions).toEqual(["image"]);
+    const [v] = await tool("list_variations", { campaignId: campaign.id });
+    expect(v.rationale).toMatchObject({ outOfPlanReason: "The person asked to try the boot image", outOfPlan: ["image"] });
+    expect(v.changes).toEqual([expect.objectContaining({ field: "Image", before: "shoe.svg", after: "boot.png" })]);
+
+    expect(await tool("upload_image", { projectId: project.id, base64: Buffer.from("not an image").toString("base64") })).toMatchObject({ isError: true, error: { code: "validation_error" } });
+  });
+
+  it("proposes extra directions for the person to approve", async () => {
+    const { campaign, design } = await approvedDirection();
+    const added = await tool("generate_creative_directions", {
+      campaignId: campaign.id,
+      directions: [{ name: "Night trail", concept: "Head-torch runs", messagingAngle: "Grip in the dark", sourceDesignId: design.id, plannedVariations: 3, varyElements: ["headline"] }],
+    });
+    expect(added[0]).toMatchObject({ name: "Night trail", status: "proposed", plannedVariations: 3 });
+    // No plan behind it, so the variation takes the design's own size.
+    const res = await tool("generate_variations", { directionId: added[0].id, variations: [{ rationale: "dark", changes: [{ op: "set_text", target: { role: "headline" }, text: "Own the night." }] }] });
+    expect(res.sizes).toEqual([{ width: 300, height: 250 }]);
+  });
+});

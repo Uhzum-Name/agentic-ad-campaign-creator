@@ -2,3 +2,4 @@
 export * from "./inspect.ts";
 export * from "./overrides.ts";
 export * from "./render.ts";
+export * from "./changes.ts";

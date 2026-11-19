@@ -20,6 +20,7 @@ export const ID_PREFIX = {
   agentMessage: "msg",
   font: "fnt",
   creativePlan: "pln",
+  image: "img",
 } as const;
 
 export type EntityKind = keyof typeof ID_PREFIX;

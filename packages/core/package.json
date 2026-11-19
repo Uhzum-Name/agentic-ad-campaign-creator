@@ -8,7 +8,8 @@
     "./config": "./src/config.ts",
     "./entities": "./src/entities.ts",
     "./design": "./src/design.ts",
-    "./planning": "./src/planning.ts"
+    "./planning": "./src/planning.ts",
+    "./variations": "./src/variations.ts"
   },
   "scripts": { "typecheck": "tsc -p ." },
   "dependencies": { "zod": "^4.6.0" }

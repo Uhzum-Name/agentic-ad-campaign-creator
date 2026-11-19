@@ -31,17 +31,53 @@ export function DesignPreview({
   maxScale = 1,
   className = "",
   children,
+  onOverflow,
 }: {
   document: DesignDocument;
   maxScale?: number;
   className?: string;
   /** Overlay content, positioned in design pixels. */
   children?: ReactNode;
+  /** Called with the names of text layers whose text does not fit their box. */
+  onOverflow?: (layerNames: string[]) => void;
 }) {
   useFonts(doc);
   const frame = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number | null>(null);
   const html = useMemo(() => renderDocument(doc, { assetUrl }), [doc]);
+  const content = useRef<HTMLDivElement>(null);
+  const names = useMemo(() => {
+    const m = new Map<string, string>();
+    const walk = (layers: DesignDocument["layers"]) => {
+      for (const l of layers) {
+        m.set(l.id, l.name);
+        if (l.type === "group") walk(l.children);
+      }
+    };
+    walk(doc.layers);
+    return m;
+  }, [doc]);
+
+  // Measures real text against its box once fonts have loaded: the browser is the only reliable judge of fit.
+  useEffect(() => {
+    if (!onOverflow || scale === null) return;
+    let cancelled = false;
+    const check = () => {
+      if (cancelled || !content.current) return;
+      const over: string[] = [];
+      content.current.querySelectorAll<HTMLElement>('[data-layer-type="text"]').forEach((box) => {
+        if (box.style.display === "none") return;
+        const inner = box.firstElementChild as HTMLElement | null;
+        if (!inner) return;
+        if (inner.scrollHeight > box.clientHeight + 2 || inner.scrollWidth > box.clientWidth + 2) over.push(names.get(box.dataset.layerId ?? "") ?? "Text");
+      });
+      onOverflow(over);
+    };
+    void document.fonts.ready.then(() => setTimeout(check, 50));
+    return () => {
+      cancelled = true;
+    };
+  }, [html, scale, onOverflow, names]);
 
   useEffect(() => {
     const el = frame.current;
@@ -66,7 +102,7 @@ export function DesignPreview({
             className="absolute left-0 top-0"
           >
             {/* The renderer escapes all document text and restricts style values. */}
-            <div dangerouslySetInnerHTML={{ __html: html }} />
+            <div ref={content} dangerouslySetInnerHTML={{ __html: html }} />
             {children}
           </div>
         </div>

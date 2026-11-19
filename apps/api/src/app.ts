@@ -8,6 +8,7 @@ import type { z } from "zod";
 import { campaignRoutes } from "./routes/campaigns.ts";
 import { designRoutes } from "./routes/designs.ts";
 import { planningRoutes } from "./routes/planning.ts";
+import { variationRoutes } from "./routes/variations.ts";
 import { creativeRoutes } from "./routes/creative.ts";
 import { jobRoutes } from "./routes/jobs.ts";
 import { registerMcpRoute } from "./mcp.ts";
@@ -64,7 +65,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   );
 
   // Binary uploads (font files). Each route sets its own size limit.
-  app.addContentTypeParser(["application/octet-stream", "font/ttf", "font/otf", "font/woff", "font/woff2", "font/sfnt"], { parseAs: "buffer" }, (_req, body, done) => done(null, body));
+  app.addContentTypeParser(["application/octet-stream", "font/ttf", "font/otf", "font/woff", "font/woff2", "font/sfnt", "image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"], { parseAs: "buffer" }, (_req, body, done) => done(null, body));
 
   app.get("/health", async () => ({ status: "ok" }));
   registerMcpRoute(app);
@@ -82,6 +83,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       creativeRoutes(v1, deps);
       designRoutes(v1, deps);
       planningRoutes(v1, deps);
+      variationRoutes(v1, deps);
       jobRoutes(v1, deps);
     },
     { prefix: "/v1" },

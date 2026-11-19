@@ -15,10 +15,11 @@ import {
   creativePlans,
   designDocuments,
   projectFonts,
+  projectImages,
   projects,
   variations,
 } from "@adengine/db";
-import { summarizeDesign } from "@adengine/design";
+import { getLayer, summarizeDesign, textCapacity } from "@adengine/design";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 
 /*
@@ -64,7 +65,7 @@ export async function getCampaignContext(db: Db, campaignId: string) {
   const campaign = await requireCampaign(db, campaignId);
   const [project] = await db.select().from(projects).where(eq(projects.id, campaign.projectId));
   const brief = await currentBrief(db, campaignId);
-  const [designs, fonts, directions, variationCounts, plans, recent, pending] = await Promise.all([
+  const [designs, fonts, directions, variationCounts, plans, recent, pending, images] = await Promise.all([
     db.select().from(designDocuments).where(eq(designDocuments.projectId, campaign.projectId)).orderBy(asc(designDocuments.createdAt)),
     db.select({ family: projectFonts.family, weight: projectFonts.weight, style: projectFonts.style }).from(projectFonts).where(eq(projectFonts.projectId, campaign.projectId)),
     db.select().from(creativeDirections).where(eq(creativeDirections.campaignId, campaignId)).orderBy(asc(creativeDirections.position)),
@@ -76,6 +77,10 @@ export async function getCampaignContext(db: Db, campaignId: string) {
     db.select().from(creativePlans).where(eq(creativePlans.campaignId, campaignId)).orderBy(desc(creativePlans.version)),
     db.select().from(agentMessages).where(eq(agentMessages.campaignId, campaignId)).orderBy(desc(agentMessages.createdAt)).limit(30),
     pendingInput(db, campaignId, false),
+    db
+      .select({ id: projectImages.id, name: projectImages.name, assetKey: projectImages.assetKey, width: projectImages.width, height: projectImages.height })
+      .from(projectImages)
+      .where(eq(projectImages.projectId, campaign.projectId)),
   ]);
   const uploaded = new Set(fonts.map((f) => f.family.toLowerCase()));
   const latestPlan = plans[0];
@@ -92,12 +97,18 @@ export async function getCampaignContext(db: Db, campaignId: string) {
         height: d.height,
         source: d.source.kind,
         roles: s.roles,
-        texts: s.texts,
-        images: s.images.map((i) => ({ id: i.id, name: i.name, role: i.role })),
+        // approxMaxChars: a rough capacity of the text box at its current size, to keep new copy from overflowing.
+        texts: s.texts.map((t) => {
+          const layer = getLayer(d.document, t.id);
+          return { ...t, ...(layer?.type === "text" ? { approxMaxChars: textCapacity(layer) } : {}) };
+        }),
+        images: s.images.map((i) => ({ id: i.id, name: i.name, role: i.role, assetKey: i.assetKey })),
         fonts: s.fonts.map((family) => ({ family, uploaded: uploaded.has(family.toLowerCase()) })),
       };
     }),
     fonts,
+    /** Uploaded images that can be swapped into variations (replace_image assetKey). */
+    images,
     directions: directions.map((d) => ({
       id: d.id,
       name: d.name,
@@ -109,6 +120,7 @@ export async function getCampaignContext(db: Db, campaignId: string) {
       plannedVariations: d.plannedVariations,
       varyElements: d.varyElements,
       sourceDesignId: d.sourceDesignId,
+      sampleHeadlines: d.sampleHeadlines,
       variations: Object.fromEntries(variationCounts.filter((v) => v.directionId === d.id).map((v) => [v.status, v.n])),
     })),
     plans: plans.map((p) => ({ id: p.id, version: p.version, status: p.status, feedback: p.feedback, decidedBy: p.decidedBy, decidedAt: p.decidedAt })),

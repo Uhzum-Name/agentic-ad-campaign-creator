@@ -135,10 +135,12 @@ brief, ask questions, propose a plan, wait for the decision.
 Tools today: `list_projects`, `create_project`, `get_project`, `update_project`,
 `list_project_assets`, `create_campaign`, `get_campaign_context`, `save_brief`,
 `analyze_brief`, `ask_clarifying_questions`, `get_pending_input`, `post_update`,
-`generate_creative_plan`, `approve_creative_plan`, `import_figma_design`,
+`generate_creative_plan`, `approve_creative_plan`, `generate_creative_directions`,
+`generate_variations`, `list_variations`, `compare_variations`, `upload_image`,
+`import_figma_design`,
 `add_sample_design`, `inspect_design`, `list_design_layers`, `get_job_status`,
-`cancel_job`. Production tools (variations, editing, animation, resizing,
-export, recipes) are added with their milestones.
+`cancel_job`. Editing, animation, resizing, export and recipe tools are added
+with their milestones.
 
 Planning (`packages/engine/src/planning.ts`, schemas in `packages/core/src/planning.ts`):
 
@@ -160,6 +162,38 @@ Planning (`packages/engine/src/planning.ts`, schemas in `packages/core/src/plann
 
 The MCP endpoint uses the REST API's authentication: with `API_KEY` set, the
 client must send `Authorization: Bearer <key>`. Without it the endpoint is open.
+
+## Variations
+
+A variation is `source design + overrides`. The agent never writes overrides
+directly: it describes **changes** (`packages/core/src/variations.ts`) —
+`set_text`, `set_text_style`, `replace_image`, `set_fill`, `set_geometry`,
+`set_visibility` — each targeting a layer by id or by role. A role naming a
+group (e.g. `cta`) stands for the text, image or background shape inside it.
+
+`compileChanges` (`packages/design/src/changes.ts`) validates every change
+against the design and compiles the list into overrides, classifying each into
+a **dimension** (headline, subheadline, body, CTA, offer, image, layout, visual
+treatment, logo, legal, background) from the layer's role or its nearest
+ancestor's. Changes outside the direction's planned `varyElements` are refused
+unless the agent records an `outOfPlanReason`. It also warns when copy likely
+exceeds a text box (an estimate from box size and font size); the web preview
+measures actual overflow in the browser and flags it on the card.
+
+`generateVariations` (`packages/engine/src/variations.ts`) takes up to 50
+variations per call and is all-or-nothing: if any is invalid nothing is saved
+and the error lists each problem by variation number. A variation may build on
+another (`basedOnVariationId`), inheriting its overrides. Sizes default to the
+approved plan's formats. The agent's changes, the dimensions they touched,
+warnings and rationale are stored with each variation.
+
+`diffDocuments` explains any two versions layer by layer; the API exposes a
+variation's changes from its source and comparisons of 2–6 variations, and the
+grid's Compare view shows the same.
+
+Images: a per-project library (`project_images`) of PNG, JPEG, GIF, WebP and SVG
+files up to 4 MB, with format and pixel size read from the file. A variation
+may only use library images or images already in the project's designs.
 
 ## API conventions
 

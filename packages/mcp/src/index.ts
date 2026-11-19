@@ -1,4 +1,4 @@
-import { AskQuestionsInput, BriefAnalysis, CreativePlan, SEMANTIC_ROLES } from "@adengine/core";
+import { AskQuestionsInput, BriefAnalysis, CreativePlan, GenerateDirectionsInput, GenerateVariationsInput, SEMANTIC_ROLES } from "@adengine/core";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -24,6 +24,7 @@ How to work on a campaign:
 4. Propose a structured plan with generate_creative_plan. Base directions on the project's designs (sourceDesignId) when there are any, choose what varies per direction, and list the sizes and outputs.
 5. Wait for the person's decision: poll get_pending_input. A plan_decision says "Approved plan vN" or "Requested changes to plan vN: ...". On changes, propose a revised plan; it becomes the next version.
 6. Only call approve_creative_plan yourself if the person explicitly told you to approve on their behalf, and quote their words.
+7. After approval, produce variations per direction with generate_variations. Each variation is a list of changes to the direction's source design: set_text, set_text_style, replace_image, set_fill, set_geometry, set_visibility. Target layers by role (headline, cta, ...) or layerId from the context. Change only what the direction's varyElements allow; the engine refuses other changes unless you give outOfPlanReason. Keep copy within each text layer's approxMaxChars. Make variations genuinely different from each other: check list_variations first and avoid repeating headlines. A batch is all-or-nothing: if any variation is invalid nothing is saved, and the error lists each problem by variation number.
 Use post_update to tell the person what you are doing or to answer them; keep updates short. Long-running work returns a job; check it with get_job_status.
 Errors come back with a code (validation_error, not_found, conflict, unauthorized, rate_limited, upstream_error) and a message saying what to fix.`;
 
@@ -75,15 +76,22 @@ export function createMcpServer(call: ApiCaller): McpServer {
   );
   tool(
     "list_project_assets",
-    { title: "List project assets", description: "The project's source designs (with how many variations use each) and uploaded brand fonts.", inputSchema: { projectId: id("Project", "prj") }, annotations: readOnly },
+    { title: "List project assets", description: "The project's source designs (with how many variations use each), image library (assetKeys for replace_image) and uploaded brand fonts.", inputSchema: { projectId: id("Project", "prj") }, annotations: readOnly },
     async (a) => {
       const designs = await call("GET", `/projects/${a.projectId}/designs`);
       if (designs.status >= 400) return designs;
       const fonts = await call("GET", `/projects/${a.projectId}/fonts`);
+      const images = await call("GET", `/projects/${a.projectId}/images`);
       const list = (designs.body as { data: { id: string; name: string; width: number; height: number; source: unknown; usageCount: number }[] }).data;
       return {
         status: 200,
-        body: { data: { designs: list.map(({ id, name, width, height, source, usageCount }) => ({ id, name, width, height, source, usageCount })), fonts: (fonts.body as { data: unknown }).data } },
+        body: {
+          data: {
+            designs: list.map(({ id, name, width, height, source, usageCount }) => ({ id, name, width, height, source, usageCount })),
+            images: (images.body as { data: unknown }).data,
+            fonts: (fonts.body as { data: unknown }).data,
+          },
+        },
       };
     },
   );
@@ -164,6 +172,61 @@ export function createMcpServer(call: ApiCaller): McpServer {
       inputSchema: { planId: id("Plan", "pln"), instruction: z.string().min(1).max(2000).describe("The person's words authorising approval") },
     },
     (a) => call("POST", `/plans/${a.planId}/approve`, { by: "agent", note: a.instruction }),
+  );
+
+  // ---- production
+  tool(
+    "generate_creative_directions",
+    {
+      title: "Propose creative directions",
+      description: "Adds directions to a campaign outside a plan (e.g. when the person asks for more ideas). They start as proposed; the person approves them in the workspace. For a full plan use generate_creative_plan.",
+      inputSchema: { campaignId: id("Campaign", "cmp"), directions: GenerateDirectionsInput.shape.directions },
+    },
+    (a) => call("POST", `/campaigns/${a.campaignId}/directions/batch`, { directions: a.directions }),
+  );
+  tool(
+    "generate_variations",
+    {
+      title: "Generate variations",
+      description:
+        "Creates up to 50 editable variations in a direction, each described as changes to the direction's source design. Ops: set_text {target, text}; set_text_style {target, style}; replace_image {target, assetKey, fit?, focus?}; set_fill {target, fill}; set_geometry {target, x?, y?, width?, height?}; set_visibility {target, visible}. target is {role} or {layerId}; a group role (e.g. cta) stands for the text, image or background shape inside it. Sizes default to the approved plan's formats. Returns each variation's id, the dimensions it changed, and warnings such as likely text overflow.",
+      inputSchema: {
+        directionId: id("Direction", "dir"),
+        variations: GenerateVariationsInput.shape.variations,
+        sizes: GenerateVariationsInput.shape.sizes,
+        sourceDesignId: z.string().optional().describe("Only needed when the direction has no source design"),
+      },
+    },
+    ({ directionId, ...body }) => call("POST", `/directions/${directionId}/variations/generate`, body),
+  );
+  tool(
+    "list_variations",
+    {
+      title: "List variations",
+      description: "A campaign's (or one direction's) variations with status, rationale, resulting text, and exactly what each changed from its source design.",
+      inputSchema: { campaignId: id("Campaign", "cmp"), directionId: z.string().optional() },
+      annotations: readOnly,
+    },
+    (a) => call("GET", `/campaigns/${a.campaignId}/variations${a.directionId ? `?directionId=${encodeURIComponent(a.directionId)}` : ""}`),
+  );
+  tool(
+    "compare_variations",
+    {
+      title: "Compare variations",
+      description: "For 2–6 variations: what each changed from its source, and how each differs from the first one.",
+      inputSchema: { variationIds: z.array(z.string()).min(2).max(6) },
+      annotations: readOnly,
+    },
+    (a) => call("GET", `/variations/compare?ids=${a.variationIds.map(encodeURIComponent).join(",")}`),
+  );
+  tool(
+    "upload_image",
+    {
+      title: "Upload image",
+      description: "Adds an image (PNG, JPEG, GIF, WebP or SVG, up to 4 MB) to the project's library, base64-encoded. Its assetKey can then be used in replace_image.",
+      inputSchema: { projectId: id("Project", "prj"), name: z.string().max(200).optional(), base64: z.string().min(1) },
+    },
+    (a) => call("POST", `/projects/${a.projectId}/images/base64`, { name: a.name, data: a.base64 }),
   );
 
   // ---- designs

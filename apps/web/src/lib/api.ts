@@ -57,6 +57,10 @@ export interface Variation {
   status: VariationStatus;
   sourceDesignId: string | null;
   overrides: Record<string, Record<string, unknown>>;
+  parentVariationId: string | null;
+  dimensions: string[] | null;
+  warnings: string[] | null;
+  rationale: { summary?: string; outOfPlanReason?: string; outOfPlan?: string[] } | null;
   formats: Format[];
 }
 export interface Direction {
@@ -128,6 +132,34 @@ export async function uploadFontFile(projectId: string, file: File): Promise<Pro
     const message = res.status === 413 ? "The file is too large (4 MB limit)." : (payload?.error?.message ?? `The upload failed (${res.status}).`);
     throw new ApiError(message, res.status, payload?.error?.code);
   }
+  return payload.data;
+}
+
+export interface ProjectImage {
+  id: string;
+  name: string;
+  assetKey: string;
+  contentType: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+}
+
+/** Uploads an image file as the raw request body. */
+export async function uploadImageFile(projectId: string, file: File): Promise<ProjectImage> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/projects/${projectId}/images?name=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: file,
+    });
+  } catch {
+    throw new ApiError("Could not reach the server.", 0);
+  }
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status === 413 ? "The image is too large (4 MB limit)." : (payload?.error?.message ?? `The upload failed (${res.status}).`), res.status);
   return payload.data;
 }
 

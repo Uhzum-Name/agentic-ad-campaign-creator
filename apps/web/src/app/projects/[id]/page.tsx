@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { CreateForm } from "../../../components/CreateForm";
 import { DesignLibrary } from "../../../components/DesignLibrary";
 import { FontManager } from "../../../components/FontManager";
+import { ImageLibrary } from "../../../components/ImageLibrary";
 import { ProjectFontsProvider } from "../../../components/ProjectFonts";
 import { EmptyState, ErrorNote, Skeleton, StatusBadge, TopBar } from "../../../components/ui";
 import { type Campaign, type Project, api, timeAgo, useResource } from "../../../lib/api";
@@ -61,6 +62,9 @@ export default function ProjectPage() {
         <ProjectFontsProvider projectId={id}>
           <div className="border-t border-zinc-200 pt-6">
             <DesignLibrary projectId={id} />
+          </div>
+          <div className="border-t border-zinc-200 pt-6">
+            <ImageLibrary projectId={id} />
           </div>
           <div className="border-t border-zinc-200 pt-6">
             <FontManager projectId={id} />

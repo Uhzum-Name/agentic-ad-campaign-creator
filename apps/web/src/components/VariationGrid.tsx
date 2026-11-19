@@ -1,10 +1,10 @@
 "use client";
 
-import { applyOverrides } from "@adengine/design";
 import { useMemo, useState } from "react";
 import { type Design, type Direction, type Variation, type Workspace, api, useResource } from "../lib/api";
 import { PRESET_SIZES } from "../lib/sizes";
-import { DesignPreview } from "./DesignPreview";
+import { CompareView } from "./CompareView";
+import { VariationCard } from "./VariationCard";
 import { CreateForm } from "./CreateForm";
 import { Button, EmptyState, ErrorNote, StatusBadge, inputClass } from "./ui";
 
@@ -22,10 +22,16 @@ export function VariationGrid({ workspace, onChange }: { workspace: Workspace; o
   const [filter, setFilter] = useState<FilterId>("all");
   const [density, setDensity] = useState<Density>("large");
   const [error, setError] = useState<string>();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [comparing, setComparing] = useState(false);
   const projectDesigns = useResource<Design[]>(`/projects/${workspace.campaign.projectId}/designs`);
 
   const all = useMemo(() => workspace.directions.flatMap((d) => d.variations), [workspace]);
   const activeFilter = FILTERS.find((f) => f.id === filter)!;
+  const nameById = useMemo(() => new Map(all.map((v) => [v.id, v.name])), [all]);
+  // Forget selections of variations that no longer exist.
+  const liveSelected = selected.filter((id) => nameById.has(id));
+  const toggle = (id: string, on: boolean) => setSelected((cur) => (on ? [...cur.filter((x) => x !== id), id].slice(-4) : cur.filter((x) => x !== id)));
 
   /** Runs a mutation, then reloads the grid; failures are shown, never swallowed. */
   async function act(fn: () => Promise<unknown>) {
@@ -72,7 +78,20 @@ export function VariationGrid({ workspace, onChange }: { workspace: Workspace; o
             </button>
           ))}
         </div>
-        <div role="group" aria-label="Card size" className="ml-auto flex rounded-md border border-zinc-300 bg-white p-0.5">
+        <div className="ml-auto flex items-center gap-2">
+          {liveSelected.length > 0 && (
+            <>
+              <span className="text-xs text-zinc-600">{liveSelected.length} selected</span>
+              <Button size="sm" variant="primary" disabled={liveSelected.length < 2} onClick={() => setComparing(true)} title={liveSelected.length < 2 ? "Select at least two" : undefined}>
+                Compare
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected([])}>
+                Clear
+              </Button>
+            </>
+          )}
+        </div>
+        <div role="group" aria-label="Card size" className="flex rounded-md border border-zinc-300 bg-white p-0.5">
           {(["large", "compact"] as const).map((d) => (
             <button
               key={d}
@@ -88,9 +107,12 @@ export function VariationGrid({ workspace, onChange }: { workspace: Workspace; o
       </div>
 
       {error && <ErrorNote>{error}</ErrorNote>}
+      {comparing && liveSelected.length >= 2 && (
+        <CompareView items={liveSelected.map((id) => all.find((v) => v.id === id)!)} workspace={workspace} onClose={() => setComparing(false)} />
+      )}
 
       {workspace.directions.map((direction) => (
-        <DirectionSection key={direction.id} direction={direction} designs={workspace.designs} projectDesigns={projectDesigns.data ?? []} visible={direction.variations.filter(activeFilter.match)} filtered={filter !== "all"} density={density} act={act} />
+        <DirectionSection key={direction.id} direction={direction} designs={workspace.designs} projectDesigns={projectDesigns.data ?? []} visible={direction.variations.filter(activeFilter.match)} filtered={filter !== "all"} density={density} act={act} selected={liveSelected} onSelect={toggle} nameById={nameById} />
       ))}
 
       <div className="max-w-xl border-t border-zinc-200 pt-4">
@@ -108,6 +130,9 @@ function DirectionSection({
   filtered,
   density,
   act,
+  selected,
+  onSelect,
+  nameById,
 }: {
   direction: Direction;
   designs: Workspace["designs"];
@@ -116,6 +141,9 @@ function DirectionSection({
   filtered: boolean;
   density: Density;
   act: (fn: () => Promise<unknown>) => Promise<void>;
+  selected: string[];
+  onSelect: (id: string, on: boolean) => void;
+  nameById: Map<string, string>;
 }) {
   const [adding, setAdding] = useState(false);
   const [sourceDesignId, setSourceDesignId] = useState("");
@@ -195,7 +223,15 @@ function DirectionSection({
           <ul className={`grid gap-3 ${columns}`}>
             {visible.map((v) => (
               <li key={v.id}>
-                <VariationCard variation={v} design={v.sourceDesignId ? designs[v.sourceDesignId] : undefined} compact={density === "compact"} act={act} />
+                <VariationCard
+                  variation={v}
+                  design={v.sourceDesignId ? designs[v.sourceDesignId] : undefined}
+                  parentName={v.parentVariationId ? nameById.get(v.parentVariationId) : undefined}
+                  compact={density === "compact"}
+                  selected={selected.includes(v.id)}
+                  onSelect={(on) => onSelect(v.id, on)}
+                  act={act}
+                />
               </li>
             ))}
           </ul>
@@ -203,72 +239,4 @@ function DirectionSection({
       </div>
     </section>
   );
-}
-
-function VariationCard({ variation, design, compact, act }: { variation: Variation; design?: Workspace["designs"][string]; compact: boolean; act: (fn: () => Promise<unknown>) => Promise<void> }) {
-  const setStatus = (status: Variation["status"]) => act(() => api(`/variations/${variation.id}`, { method: "PATCH", body: { status } }));
-  const outline =
-    variation.status === "approved" ? "border-emerald-300" : variation.status === "rejected" ? "border-rose-200 opacity-70" : "border-zinc-200";
-
-  return (
-    <article aria-label={variation.name} className={`flex h-full flex-col overflow-hidden rounded-lg border bg-white ${outline}`}>
-      <PreviewSurface variation={variation} design={design} />
-      <div className={`flex flex-1 flex-col gap-2 ${compact ? "p-2" : "p-3"}`}>
-        <div className="flex items-start justify-between gap-2">
-          <h3 className={`min-w-0 font-medium ${compact ? "truncate text-xs" : "line-clamp-2 text-sm"}`}>{variation.name}</h3>
-          {!compact && <StatusBadge status={variation.status} />}
-        </div>
-        {compact && <StatusBadge status={variation.status} />}
-        {!compact && (
-          <p className="text-xs text-zinc-500">
-            {variation.formats.length === 0 ? "No sizes yet" : variation.formats.map((f) => `${f.width}×${f.height}`).join("  ")}
-          </p>
-        )}
-        <div className="mt-auto flex gap-1 pt-1">
-          {variation.status === "approved" || variation.status === "rejected" ? (
-            <Button size="sm" variant="ghost" onClick={() => setStatus("ready")}>
-              Undo
-            </Button>
-          ) : (
-            <>
-              <Button size="sm" onClick={() => setStatus("approved")} disabled={variation.status === "generating"}>
-                Approve
-              </Button>
-              <Button size="sm" variant="danger" onClick={() => setStatus("rejected")} disabled={variation.status === "generating"}>
-                Reject
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/**
- * The preview area of a card: the variation's source design with the
- * variation's overrides applied, drawn by the engine's renderer at the
- * design's own size (per-size layouts arrive with resizing).
- */
-function PreviewSurface({ variation, design }: { variation: Variation; design?: Workspace["designs"][string] }) {
-  const base = "flex aspect-[6/5] items-center justify-center border-b border-zinc-100 px-3 text-center text-xs";
-  const doc = useMemo(() => (design ? applyOverrides(design.document, variation.overrides) : undefined), [design, variation.overrides]);
-  if (variation.status === "generating") {
-    return (
-      <div role="status" className={`${base} preview-generating font-medium text-indigo-700`}>
-        Generating…
-      </div>
-    );
-  }
-  if (variation.status === "failed") {
-    return <div className={`${base} bg-rose-50 font-medium text-rose-700`}>Generation failed</div>;
-  }
-  if (doc) {
-    return (
-      <div className="preview-empty aspect-[6/5] border-b border-zinc-100 p-2">
-        <DesignPreview document={doc} />
-      </div>
-    );
-  }
-  return <div className={`${base} preview-empty text-zinc-500`}>{variation.sourceDesignId ? "Design unavailable" : "No design attached"}</div>;
 }
