@@ -131,6 +131,8 @@ export const variations = pgTable(
     animationSpecId: text("animation_spec_id"),
     name: text("name").notNull(),
     overrides: jsonb("overrides").$type<Record<string, Record<string, unknown>>>().notNull().default({}),
+    /** Increments on every saved edit; edits must name the revision they started from. */
+    revision: integer("revision").notNull().default(1),
     /** The variation this one was built from, if any (it inherits that variation's overrides). */
     parentVariationId: text("parent_variation_id"),
     /** The changes as the agent described them, and what they touched. */
@@ -254,6 +256,8 @@ export const agentMessages = pgTable(
     answeredAt: ts("answered_at"),
     /** kind "plan": the plan this entry announces. */
     planId: text("plan_id"),
+    /** The variation an entry is about, e.g. the person asking the agent about one ad. */
+    variationId: text("variation_id"),
     createdAt: createdAt(),
   },
   (t) => [index("agent_messages_campaign_idx").on(t.campaignId, t.createdAt)],
@@ -337,4 +341,20 @@ export const projectImages = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("project_images_project_idx").on(t.projectId)],
+);
+
+/** Every saved state of a variation's overrides: its version history. */
+export const variationRevisions = pgTable(
+  "variation_revisions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => newId("revision")),
+    variationId: text("variation_id").notNull().references(() => variations.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    overrides: jsonb("overrides").$type<Record<string, Record<string, unknown>>>().notNull(),
+    editedBy: text("edited_by").$type<"user" | "agent">().notNull(),
+    note: text("note"),
+    dimensions: jsonb("dimensions").$type<string[]>(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("variation_revisions_idx").on(t.variationId, t.revision)],
 );

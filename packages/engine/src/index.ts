@@ -40,3 +40,4 @@ export function createEngineRegistry(deps: EngineDeps): JobRegistry {
 export * from "./planning.ts";
 export * from "./images.ts";
 export * from "./variations.ts";
+export * from "./editing.ts";

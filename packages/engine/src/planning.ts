@@ -208,7 +208,14 @@ export async function pendingInput(db: Db, campaignId: string, markRead: boolean
   return rows.map((r) =>
     r.kind === "question"
       ? { type: "answer" as const, messageId: r.id, question: r.text, answer: r.answer, answeredAt: r.answeredAt }
-      : { type: r.planId ? ("plan_decision" as const) : ("message" as const), messageId: r.id, text: r.text, planId: r.planId, createdAt: r.createdAt },
+      : {
+          type: r.planId ? ("plan_decision" as const) : r.kind === "activity" ? ("edit" as const) : ("message" as const),
+          messageId: r.id,
+          text: r.text,
+          planId: r.planId,
+          variationId: r.variationId,
+          createdAt: r.createdAt,
+        },
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { DIMENSION_LABELS, type ChangeDimension } from "@adengine/core/variations";
 import { applyOverrides } from "@adengine/design";
+import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { type Variation, type Workspace, api } from "../lib/api";
 import { DesignPreview } from "./DesignPreview";
@@ -44,7 +45,13 @@ export function VariationCard({
       <label className="absolute left-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded bg-white/90 shadow-sm ring-1 ring-zinc-300">
         <input type="checkbox" className="size-3.5 accent-[var(--color-accent)]" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${variation.name} to compare`} />
       </label>
-      <PreviewSurface variation={variation} design={design} onOverflow={setOverflow} />
+      {design ? (
+        <Link href={`/variations/${variation.id}`} aria-label={`Edit ${variation.name}`} className="block">
+          <PreviewSurface variation={variation} design={design} onOverflow={setOverflow} />
+        </Link>
+      ) : (
+        <PreviewSurface variation={variation} design={design} onOverflow={setOverflow} />
+      )}
       <div className={`flex flex-1 flex-col gap-2 ${compact ? "p-2" : "p-3"}`}>
         <div className="flex items-start justify-between gap-2">
           <h3 className={`min-w-0 font-medium ${compact ? "truncate text-xs" : "line-clamp-2 text-sm"}`} title={variation.name}>
@@ -78,7 +85,12 @@ export function VariationCard({
             {variation.formats.length === 0 ? "No sizes yet" : variation.formats.map((f) => `${f.width}×${f.height}`).join("  ")}
           </p>
         )}
-        <div className="mt-auto flex gap-1 pt-1">
+        <div className="mt-auto flex flex-wrap gap-1 pt-1">
+          {design && (
+            <Link href={`/variations/${variation.id}`} className="inline-flex h-7 items-center rounded-md px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100">
+              Edit
+            </Link>
+          )}
           {variation.status === "approved" || variation.status === "rejected" ? (
             <Button size="sm" variant="ghost" onClick={() => setStatus("ready")}>
               Undo

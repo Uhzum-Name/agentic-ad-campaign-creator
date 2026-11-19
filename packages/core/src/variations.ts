@@ -54,6 +54,12 @@ export const VariationChange = z.discriminatedUnion("op", [
     height: z.number().positive().optional(),
   }),
   z.object({ op: z.literal("set_visibility"), target: LayerTarget, visible: z.boolean() }),
+  z.object({ op: z.literal("set_opacity"), target: LayerTarget, opacity: z.number().min(0).max(1) }),
+  z.object({
+    op: z.literal("reorder"),
+    target: LayerTarget,
+    position: z.enum(["front", "back", "forward", "backward"]).describe("Within its parent: to the top, to the bottom, or one step up or down"),
+  }),
 ]);
 export type VariationChange = z.infer<typeof VariationChange>;
 
@@ -107,3 +113,12 @@ export const DirectionSpec = z.object({
   varyElements: z.array(z.enum(VARY_ELEMENTS)).min(1).optional(),
 });
 export const GenerateDirectionsInput = z.object({ directions: z.array(DirectionSpec).min(1).max(20) });
+
+/** Edits to one existing variation (by the person in the editor, or by the agent on request). */
+export const EditVariationInput = z.object({
+  changes: z.array(VariationChange).min(1).max(100),
+  /** The version the edit was based on; if the variation has moved on, the edit is refused. */
+  baseRevision: z.number().int().min(1).optional(),
+  note: z.string().trim().max(1000).optional().describe("What was changed and why, shown in the variation's history"),
+});
+export type EditVariationInput = z.infer<typeof EditVariationInput>;

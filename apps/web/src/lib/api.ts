@@ -52,6 +52,7 @@ export interface Format {
 }
 export interface Variation {
   id: string;
+  revision?: number;
   directionId: string;
   name: string;
   status: VariationStatus;

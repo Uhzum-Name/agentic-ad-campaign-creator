@@ -7,7 +7,7 @@
 | 3 | Creative document model and design ingestion | Done. Verified on a real 970×250 client frame; brand fonts can be uploaded per project. |
 | 4 | Agent orchestration and creative planning | Done: MCP server, brief analysis, clarifying questions, versioned plans with approval |
 | 5 | Variation generation engine | Done: change-based variations, plan-controlled dimensions, batches, image library, comparison |
-| 6 | Creative editing and manipulation | Not started |
+| 6 | Creative editing and manipulation | Done: variation editor, undo/redo, versions with restore, conflict protection, agent edits |
 | 7 | Animation engine | Not started |
 | 8 | Intelligent resizing and adaptation | Not started |
 | 9 | Rendering, export and validation | Not started |

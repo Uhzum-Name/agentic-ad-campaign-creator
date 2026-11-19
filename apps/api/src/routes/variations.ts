@@ -3,6 +3,10 @@ import {
   MAX_IMAGE_BYTES,
   compareVariations,
   deleteImage,
+  editVariation,
+  getVariationForEditing,
+  restoreVariationRevision,
+  saveVariationOverrides,
   generateDirections,
   generateVariations,
   listImages,
@@ -12,6 +16,10 @@ import {
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { type AppDeps, parse } from "../app.ts";
+
+const SaveOverridesBody = z.object({ overrides: z.record(z.string(), z.unknown()), baseRevision: z.number().int().min(1), note: z.string().max(1000).optional() });
+const EditQuery = z.object({ by: z.enum(["user", "agent"]).default("user") });
+const RestoreBody = z.object({ baseRevision: z.number().int().min(1) });
 
 const Base64Image = z.object({ name: z.string().max(200).optional(), data: z.string().min(1).describe("Base64-encoded image file") });
 
@@ -57,6 +65,29 @@ export function variationRoutes(app: FastifyInstance, { db, storage }: AppDeps):
     const [v] = await listVariationsDetailed(db, { variationId: req.params.id });
     if (!v) throw AppError.notFound("Variation", req.params.id);
     return { data: v };
+  });
+
+  // ----- editing one variation
+  app.get<{ Params: { id: string } }>("/variations/:id/edit", async (req) => ({ data: await getVariationForEditing(db, req.params.id) }));
+
+  /** The editor saves its whole working state; baseRevision guards against overwriting someone else's edit. */
+  app.put<{ Params: { id: string } }>("/variations/:id/overrides", async (req) => {
+    const body = parse(SaveOverridesBody, req.body);
+    return { data: await saveVariationOverrides(db, req.params.id, { overrides: body.overrides, baseRevision: body.baseRevision, ...(body.note ? { note: body.note } : {}) }) };
+  });
+
+  /** Described changes applied to the variation's current state (used by agents). */
+  app.post<{ Params: { id: string }; Querystring: { by?: string } }>("/variations/:id/edits", async (req) => {
+    const { by } = parse(EditQuery, req.query);
+    const base = (req.body as { baseRevision?: unknown } | undefined)?.baseRevision;
+    return { data: await editVariation(db, req.params.id, req.body, by, typeof base === "number" ? base : undefined) };
+  });
+
+  app.post<{ Params: { id: string; revision: string } }>("/variations/:id/revisions/:revision/restore", async (req) => {
+    const body = parse(RestoreBody, req.body);
+    const revision = Number(req.params.revision);
+    if (!Number.isInteger(revision) || revision < 1) throw new AppError("validation_error", "Invalid version number");
+    return { data: await restoreVariationRevision(db, req.params.id, revision, body.baseRevision) };
   });
 
   app.get<{ Querystring: { ids?: string } }>("/variations/compare", async (req) => ({

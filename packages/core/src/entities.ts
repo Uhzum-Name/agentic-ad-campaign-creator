@@ -79,6 +79,8 @@ export const PostMessageInput = z.object({
   text: z.string().trim().min(1).max(20_000),
   role: z.enum(["user", "agent"]).default("user"),
   kind: z.enum(["message", "activity"]).default("message"),
+  /** The variation the message is about, if any. */
+  variationId: z.string().optional(),
 });
 
 export const CreateJobInput = z.object({

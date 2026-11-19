@@ -1,7 +1,7 @@
 import type { DesignDocument, Layer, SemanticRole, TextLayer } from "@adengine/core/design";
 import type { ChangeDimension, LayerTarget, VariationChange } from "@adengine/core/variations";
 import { type LayerInfo, getLayer, listLayers } from "./inspect.ts";
-import { type LayerOverrides, applyOverrides, mergeOverrides } from "./overrides.ts";
+import { type LayerOverrides, ORDER_KEY, ROOT, applyOverrides, mergeOverrides } from "./overrides.ts";
 
 /*
  * Turning an agent's described changes into overrides, and explaining the
@@ -33,10 +33,11 @@ function effectiveRole(info: LayerInfo, byId: Map<string, LayerInfo>): SemanticR
   return undefined;
 }
 
-type Field = "text" | "style" | "image" | "fill" | "geometry" | "visibility";
+type Field = "text" | "style" | "image" | "fill" | "geometry" | "visibility" | "opacity" | "order";
 
 function dimensionFor(field: Field, role: SemanticRole | undefined): ChangeDimension {
-  if (field === "geometry" || field === "visibility") return "layout";
+  if (field === "geometry" || field === "visibility" || field === "order") return "layout";
+  if (field === "opacity") return "visual_treatment";
   const byRole = role ? ROLE_DIMENSION[role] : undefined;
   if (field === "text") return byRole && byRole !== "image" && byRole !== "background" ? byRole : "messaging";
   if (field === "image") return byRole === "logo" ? "logo" : "image";
@@ -219,6 +220,32 @@ export function compileChanges(doc: DesignDocument, changes: VariationChange[], 
         dims.add("layout");
         return;
       }
+      case "set_opacity": {
+        const t = resolve(change.target, "any", n)[0];
+        if (!t) return;
+        patch(t.id, { opacity: change.opacity });
+        dims.add("visual_treatment");
+        return;
+      }
+      case "reorder": {
+        const t = resolve(change.target, "any", n)[0];
+        if (!t) return;
+        const parent = t.parentId ?? ROOT;
+        // Current order (with earlier reorders applied), back to front.
+        const current = applyOverrides(doc, overrides);
+        const siblings = (t.parentId ? (getLayer(current, t.parentId) as { children: Layer[] }).children : current.layers).map((l) => l.id);
+        const i = siblings.indexOf(t.id);
+        const next = siblings.filter((id) => id !== t.id);
+        const to = change.position === "front" ? next.length : change.position === "back" ? 0 : change.position === "forward" ? Math.min(next.length, i + 1) : Math.max(0, i - 1);
+        next.splice(to, 0, t.id);
+        if (next.join() === siblings.join()) {
+          warnings.push(`Change ${n}: "${t.name}" is already ${change.position === "front" || change.position === "forward" ? "at the front" : "at the back"}.`);
+          return;
+        }
+        overrides = mergeOverrides(overrides, { [ORDER_KEY]: { [parent]: next } });
+        dims.add("layout");
+        return;
+      }
     }
   });
 
@@ -293,6 +320,21 @@ export function diffDocuments(from: DesignDocument, to: DesignDocument, opts: { 
     add("geometry", "Position", `${before.x}, ${before.y}`, `${after.x}, ${after.y}`);
     add("geometry", "Size", `${before.width} × ${before.height}`, `${after.width} × ${after.height}`);
     add("visibility", "Visibility", before.visible ? "shown" : "hidden", after.visible ? "shown" : "hidden");
+    add("opacity", "Opacity", `${Math.round(before.opacity * 100)}%`, `${Math.round(after.opacity * 100)}%`);
+  }
+  // Stacking order, per parent.
+  const parents: { id: string; name: string; before: Layer[]; after: Layer[] }[] = [{ id: ROOT, name: "Canvas", before: from.layers, after: to.layers }];
+  for (const info of infos) {
+    const b = getLayer(from, info.id);
+    const c = getLayer(to, info.id);
+    if (b?.type === "group" && c?.type === "group") parents.push({ id: info.id, name: info.name, before: b.children, after: c.children });
+  }
+  for (const p of parents) {
+    const b = p.before.map((l) => l.name).join(" › ");
+    const c = p.after.map((l) => l.name).join(" › ");
+    if (p.before.map((l) => l.id).join() !== p.after.map((l) => l.id).join()) {
+      out.push({ layerId: p.id === ROOT ? "" : p.id, layerName: p.name, dimension: "layout", field: "Stacking order", before: b, after: c });
+    }
   }
   return out;
 }
@@ -300,4 +342,18 @@ export function diffDocuments(from: DesignDocument, to: DesignDocument, opts: { 
 /** The distinct dimensions in a list of differences, in a stable order. */
 export function changedDimensions(diffs: LayerDifference[]): ChangeDimension[] {
   return [...new Set(diffs.map((d) => d.dimension))];
+}
+
+/** Likely-overflow warnings for text layers whose text the overrides change. */
+export function textFitWarnings(doc: DesignDocument, overrides: LayerOverrides): string[] {
+  const result = applyOverrides(doc, overrides);
+  const out: string[] = [];
+  for (const [id, patch] of Object.entries(overrides)) {
+    if (id === ORDER_KEY || !("text" in patch) && !("style" in patch) && !("width" in patch) && !("height" in patch)) continue;
+    const layer = getLayer(result, id);
+    if (layer?.type !== "text") continue;
+    const cap = textCapacity(layer);
+    if (layer.text.length > cap * 1.15) out.push(`"${layer.name}" has ${layer.text.length} characters and holds about ${cap}. It may overflow.`);
+  }
+  return out;
 }

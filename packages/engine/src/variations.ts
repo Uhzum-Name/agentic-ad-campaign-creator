@@ -1,5 +1,5 @@
 import { AppError, DesignDocument, type DirectionStatus, GenerateDirectionsInput, GenerateVariationsInput, type VariationChange } from "@adengine/core";
-import { type Db, agentMessages, campaigns, creativeDirections, creativePlans, designDocuments, projectImages, variationFormats, variations } from "@adengine/db";
+import { type Db, agentMessages, campaigns, creativeDirections, creativePlans, designDocuments, projectImages, variationFormats, variationRevisions, variations } from "@adengine/db";
 import { type LayerOverrides, applyOverrides, changedDimensions, compileChanges, diffDocuments, summarizeDesign } from "@adengine/design";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { foreignAssetKeys } from "./images.ts";
@@ -122,7 +122,10 @@ export async function generateVariations(db: Db, directionId: string, input: unk
           position: start + i,
         })),
       )
-      .returning({ id: variations.id, name: variations.name, dimensions: variations.dimensions, warnings: variations.warnings });
+      .returning({ id: variations.id, name: variations.name, dimensions: variations.dimensions, warnings: variations.warnings, overrides: variations.overrides });
+    await tx.insert(variationRevisions).values(
+      rows.map((r, i) => ({ variationId: r.id, revision: 1, overrides: r.overrides, editedBy: "agent" as const, note: compiled[i]!.spec.rationale, dimensions: r.dimensions })),
+    );
     await tx.insert(variationFormats).values(rows.flatMap((r) => uniqueSizes.map((s) => ({ variationId: r.id, width: s.width, height: s.height, label: s.label ?? null }))));
     return rows;
   });

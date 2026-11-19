@@ -136,11 +136,12 @@ Tools today: `list_projects`, `create_project`, `get_project`, `update_project`,
 `list_project_assets`, `create_campaign`, `get_campaign_context`, `save_brief`,
 `analyze_brief`, `ask_clarifying_questions`, `get_pending_input`, `post_update`,
 `generate_creative_plan`, `approve_creative_plan`, `generate_creative_directions`,
-`generate_variations`, `list_variations`, `compare_variations`, `upload_image`,
+`generate_variations`, `list_variations`, `compare_variations`, `get_variation`,
+`edit_creative_element`, `upload_image`,
 `import_figma_design`,
 `add_sample_design`, `inspect_design`, `list_design_layers`, `get_job_status`,
-`cancel_job`. Editing, animation, resizing, export and recipe tools are added
-with their milestones.
+`cancel_job`. Animation, resizing, export and recipe tools are added with their
+milestones.
 
 Planning (`packages/engine/src/planning.ts`, schemas in `packages/core/src/planning.ts`):
 
@@ -190,6 +191,28 @@ warnings and rationale are stored with each variation.
 `diffDocuments` explains any two versions layer by layer; the API exposes a
 variation's changes from its source and comparisons of 2–6 variations, and the
 grid's Compare view shows the same.
+
+### Editing a variation
+
+The editor (`/variations/:id`) works on the variation's overrides. Every edit
+— typing, dragging, nudging, picking an image, hiding, reordering — is a
+change of the same kind the agent sends (`compileChanges`, which adds
+`set_opacity` and `reorder`), so both are validated identically. Undo and redo
+are client-side over the working overrides; Save writes them with
+`PUT /v1/variations/:id/overrides`, which re-validates (`overrideProblems`,
+document parse, image ownership) server-side.
+
+Stacking order is stored in overrides under the reserved key `$order`
+(parent id or `$root` → child ids).
+
+Every save, agent edit (`POST /v1/variations/:id/edits`, MCP
+`edit_creative_element`) and restore creates a revision in
+`variation_revisions`. A save names the revision it started from; if the
+variation has moved on, it is refused with `conflict`, and the editor offers to
+load the newer version or deliberately overwrite it. Restoring an old version
+creates a new revision; history is never rewritten. The person's edits are
+reported to the agent through pending input (type `edit`), and messages about
+one ad carry its `variationId`.
 
 Images: a per-project library (`project_images`) of PNG, JPEG, GIF, WebP and SVG
 files up to 4 MB, with format and pixel size read from the file. A variation

@@ -21,6 +21,7 @@ export const ID_PREFIX = {
   font: "fnt",
   creativePlan: "pln",
   image: "img",
+  revision: "rev",
 } as const;
 
 export type EntityKind = keyof typeof ID_PREFIX;

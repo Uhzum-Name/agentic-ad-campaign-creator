@@ -311,3 +311,73 @@ describe("variations over MCP", () => {
     expect(res.sizes).toEqual([{ width: 300, height: 250 }]);
   });
 });
+
+describe("editing a variation", () => {
+  it("saves edits as versions, guards against overwriting, and restores", async () => {
+    const project = await tool("create_project", { name: "Editing" });
+    const design = await tool("add_sample_design", { projectId: project.id, fixture: "trail-shoe-300x250" });
+    const campaign = await tool("create_campaign", { projectId: project.id, name: "C" });
+    const [direction] = await tool("generate_creative_directions", { campaignId: campaign.id, directions: [{ name: "D", concept: "c", messagingAngle: "m", sourceDesignId: design.id }] });
+    const gen = await tool("generate_variations", { directionId: direction.id, variations: [{ name: "Wet rock", rationale: "Lead with wet rock", changes: [{ op: "set_text", target: { role: "headline" }, text: "Wet rock?" }] }] });
+    const id = gen.variations[0].id;
+
+    let edit = (await rest("GET", `/variations/${id}/edit`)).body.data;
+    expect(edit.variation).toMatchObject({ revision: 1, overrides: { headline: { text: "Wet rock?" } } });
+    expect(edit.revisions).toEqual([expect.objectContaining({ revision: 1, editedBy: "agent", note: "Lead with wet rock" })]);
+    expect(edit.design.id).toBe(design.id);
+
+    // The person's editor saves its whole working state.
+    const overrides = { headline: { text: "Wet rock? Sorted.", style: { color: "#ffd23f" } }, logo: { opacity: 0.6 }, $order: { $root: ["background", "logo", "subheadline", "product", "cta", "headline"] } };
+    const saved = await rest("PUT", `/variations/${id}/overrides`, { overrides, baseRevision: 1, note: "Brighter headline" });
+    expect(saved.status).toBe(200);
+    expect(saved.body.data).toMatchObject({ revision: 2 });
+    expect(saved.body.data.dimensions.sort()).toEqual(["headline", "layout", "visual_treatment"]);
+
+    // A stale save is refused rather than overwriting.
+    const stale = await rest("PUT", `/variations/${id}/overrides`, { overrides: {}, baseRevision: 1 });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toMatchObject({ code: "conflict", details: { currentRevision: 2 } });
+
+    // Invalid edits are refused with reasons.
+    const bad = await rest("PUT", `/variations/${id}/overrides`, { overrides: { headline: { assetKey: "x" }, ghost: { x: 1 } }, baseRevision: 2 });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.details).toEqual(['"assetKey" cannot be changed on text layer headline', "No layer ghost in the design"]);
+    const badType = await rest("PUT", `/variations/${id}/overrides`, { overrides: { headline: { opacity: 3 } }, baseRevision: 2 });
+    expect(badType.status).toBe(400);
+    const foreignImage = await rest("PUT", `/variations/${id}/overrides`, { overrides: { product: { assetKey: "designs/dsn_other/x.png" } }, baseRevision: 2 });
+    expect(foreignImage.body.error.message).toMatch(/Unknown image/);
+
+    // The agent learns of the person's edit.
+    const pending = await tool("get_pending_input", { campaignId: campaign.id });
+    expect(pending).toEqual([expect.objectContaining({ type: "edit", variationId: id, text: "Edited “Wet rock” (version 2): Brighter headline" })]);
+
+    // The agent edits one element on request, on top of the current state.
+    const notAllowed = await tool("edit_creative_element", { variationId: id, changes: [{ op: "set_text", target: { role: "offer" }, text: "x" }] });
+    expect(notAllowed).toMatchObject({ isError: true, error: { code: "validation_error" } });
+    const agentEdit = await tool("edit_creative_element", { variationId: id, baseRevision: 2, note: "Shorter CTA as asked", changes: [{ op: "set_text", target: { role: "cta" }, text: "Shop" }, { op: "reorder", target: { role: "headline" }, position: "back" }] });
+    expect(agentEdit).toMatchObject({ revision: 3 });
+    const stalеAgent = await tool("edit_creative_element", { variationId: id, baseRevision: 2, changes: [{ op: "set_text", target: { role: "cta" }, text: "Go" }] });
+    expect(stalеAgent).toMatchObject({ isError: true, error: { code: "conflict" } });
+
+    const view = await tool("get_variation", { variationId: id });
+    expect(view).toMatchObject({ revision: 3, sourceDesign: { id: design.id, width: 300 } });
+    expect(view.history.map((h: { revision: number; editedBy: string }) => `${h.revision}:${h.editedBy}`)).toEqual(["3:agent", "2:user", "1:agent"]);
+    expect(view.texts.map((t: { text: string }) => t.text)).toEqual(expect.arrayContaining(["Wet rock? Sorted.", "Shop"]));
+    expect(view.changes.map((c: { field: string }) => c.field)).toContain("Stacking order");
+
+    // Restoring version 1 creates version 4 with version 1's state.
+    const restored = await rest("POST", `/variations/${id}/revisions/1/restore`, { baseRevision: 3 });
+    expect(restored.body.data).toMatchObject({ revision: 4, dimensions: ["headline"] });
+    edit = (await rest("GET", `/variations/${id}/edit`)).body.data;
+    expect(edit.variation.overrides).toEqual({ headline: { text: "Wet rock?" } });
+    expect(edit.revisions[0]).toMatchObject({ revision: 4, note: "Restored version 1" });
+
+    // The source design never changed.
+    const source = (await rest("GET", `/designs/${design.id}/layers/headline`)).body.data;
+    expect(source.layer.text).toBe("Grip every\ntrail.");
+
+    // A question about one ad carries its id.
+    const asked = await rest("POST", `/campaigns/${campaign.id}/messages`, { text: "Can this one be punchier?", variationId: id });
+    expect(asked.body.data.variationId).toBe(id);
+  });
+});

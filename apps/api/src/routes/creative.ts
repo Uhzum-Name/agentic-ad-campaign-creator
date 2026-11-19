@@ -170,6 +170,10 @@ export function creativeRoutes(app: FastifyInstance, { db }: AppDeps): void {
       throw new AppError("validation_error", 'Only agent entries may use kind "activity"');
     }
     await requireCampaign(db, req.params.id);
+    if (input.variationId) {
+      const v = await requireVariation(db, input.variationId);
+      if (v.campaignId !== req.params.id) throw new AppError("validation_error", "That variation is in a different campaign");
+    }
     const [row] = await db.insert(agentMessages).values({ ...input, campaignId: req.params.id }).returning();
     return reply.status(201).send({ data: row });
   });

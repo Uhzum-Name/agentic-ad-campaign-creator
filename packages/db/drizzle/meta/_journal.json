@@ -43,6 +43,13 @@
       "when": 1795051209087,
       "tag": "0005_left_bloodaxe",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795054537927,
+      "tag": "0006_clean_hammerhead",
+      "breakpoints": true
     }
   ]
 }

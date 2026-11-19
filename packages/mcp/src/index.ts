@@ -1,4 +1,4 @@
-import { AskQuestionsInput, BriefAnalysis, CreativePlan, GenerateDirectionsInput, GenerateVariationsInput, SEMANTIC_ROLES } from "@adengine/core";
+import { AskQuestionsInput, BriefAnalysis, CreativePlan, EditVariationInput, GenerateDirectionsInput, GenerateVariationsInput, SEMANTIC_ROLES } from "@adengine/core";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -25,6 +25,7 @@ How to work on a campaign:
 5. Wait for the person's decision: poll get_pending_input. A plan_decision says "Approved plan vN" or "Requested changes to plan vN: ...". On changes, propose a revised plan; it becomes the next version.
 6. Only call approve_creative_plan yourself if the person explicitly told you to approve on their behalf, and quote their words.
 7. After approval, produce variations per direction with generate_variations. Each variation is a list of changes to the direction's source design: set_text, set_text_style, replace_image, set_fill, set_geometry, set_visibility. Target layers by role (headline, cta, ...) or layerId from the context. Change only what the direction's varyElements allow; the engine refuses other changes unless you give outOfPlanReason. Keep copy within each text layer's approxMaxChars. Make variations genuinely different from each other: check list_variations first and avoid repeating headlines. A batch is all-or-nothing: if any variation is invalid nothing is saved, and the error lists each problem by variation number.
+8. The person may edit variations themselves in the editor; get_pending_input reports those as type "edit". When they ask you to change one ad, use edit_creative_element rather than generating a new variation. Messages about a specific ad carry its variationId.
 Use post_update to tell the person what you are doing or to answer them; keep updates short. Long-running work returns a job; check it with get_job_status.
 Errors come back with a code (validation_error, not_found, conflict, unauthorized, rate_limited, upstream_error) and a message saying what to fix.`;
 
@@ -208,6 +209,43 @@ export function createMcpServer(call: ApiCaller): McpServer {
       annotations: readOnly,
     },
     (a) => call("GET", `/campaigns/${a.campaignId}/variations${a.directionId ? `?directionId=${encodeURIComponent(a.directionId)}` : ""}`),
+  );
+  tool(
+    "get_variation",
+    {
+      title: "Get variation",
+      description: "One variation as it currently is: its layers (with ids, roles, positions and text after its changes), what it changed from the source, its version number and edit history.",
+      inputSchema: { variationId: id("Variation", "var") },
+      annotations: readOnly,
+    },
+    async (a) => {
+      const res = await call("GET", `/variations/${a.variationId}/edit`);
+      if (res.status >= 400) return res;
+      const changes = await call("GET", `/variations/${a.variationId}/changes`);
+      const d = (res.body as { data: { variation: Record<string, unknown>; design: { id: string; name: string; width: number; height: number } | null; direction: unknown; revisions: unknown } }).data;
+      const c = (changes.body as { data: Record<string, unknown> }).data;
+      const v = d.variation;
+      return {
+        status: 200,
+        body: {
+          data: {
+            id: v.id, name: v.name, status: v.status, revision: v.revision, direction: d.direction,
+            sourceDesign: d.design ? { id: d.design.id, name: d.design.name, width: d.design.width, height: d.design.height } : null,
+            rationale: v.rationale, texts: c?.texts, changes: c?.changes, warnings: v.warnings, history: d.revisions,
+          },
+        },
+      };
+    },
+  );
+  tool(
+    "edit_creative_element",
+    {
+      title: "Edit variation",
+      description:
+        "Changes specific elements of one existing variation without regenerating it — e.g. when the person asks for a shorter headline on one ad. Same ops as generate_variations, plus set_opacity {target, opacity} and reorder {target, position: front|back|forward|backward}. Applied on top of the variation's current state and saved as a new version. Pass baseRevision (from get_variation) to be refused if the person edited it meanwhile.",
+      inputSchema: { variationId: id("Variation", "var"), changes: EditVariationInput.shape.changes, note: EditVariationInput.shape.note, baseRevision: EditVariationInput.shape.baseRevision },
+    },
+    ({ variationId, ...body }) => call("POST", `/variations/${variationId}/edits?by=agent`, body),
   );
   tool(
     "compare_variations",

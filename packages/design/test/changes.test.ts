@@ -99,3 +99,30 @@ describe("diffDocuments", () => {
     expect(diffDocuments(doc, doc)).toEqual([]);
   });
 });
+
+describe("editing operations", () => {
+  it("changes opacity and stacking order, and validates direct overrides", async () => {
+    const { overrideProblems, listLayers } = await import("../src/index.ts");
+    const r = compileChanges(doc, [
+      { op: "set_opacity", target: { role: "logo" }, opacity: 0.5 },
+      { op: "reorder", target: { role: "headline" }, position: "back" },
+      { op: "reorder", target: { layerId: "cta-label" }, position: "backward" },
+    ]);
+    expect(r.errors).toEqual([]);
+    expect(r.overrides.$order).toEqual({ $root: ["headline", "background", "logo", "subheadline", "product", "cta"], cta: ["cta-label", "cta-background"] });
+    const out = applyOverrides(doc, r.overrides);
+    expect(listLayers(out).map((l) => l.id)).toEqual(["headline", "background", "logo", "subheadline", "product", "cta", "cta-label", "cta-background"]);
+    const diffs = diffDocuments(doc, out).map((d) => `${d.layerName}: ${d.field}`);
+    expect(diffs).toEqual(["Logo: Opacity", "Canvas: Stacking order", "CTA: Stacking order"]);
+    expect(r.dimensions.sort()).toEqual(["layout", "visual_treatment"]);
+    expect(compileChanges(doc, [{ op: "reorder", target: { role: "cta" }, position: "front" }]).warnings[0]).toMatch(/already at the front/);
+
+    expect(overrideProblems(doc, r.overrides)).toEqual([]);
+    expect(overrideProblems(doc, { nope: { x: 1 }, headline: { assetKey: "x" }, logo: { opacity: 0.4 }, $order: { cta: ["headline"], logo: [] } })).toEqual([
+      "No layer nope in the design",
+      '"assetKey" cannot be changed on text layer headline',
+      "Stacking order for cta must list only its own children, once each",
+      "Stacking order given for logo, which is not a group",
+    ]);
+  });
+});
